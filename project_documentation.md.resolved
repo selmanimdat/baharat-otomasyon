@@ -1,0 +1,147 @@
+# TCP/IP Scale Client & Flask Integration Documentation
+
+This document explains the functionality of the C# TCP/IP Client (`TCPIP_Client_220927`) and provides a detailed blueprint for porting its behavior to a Python/Flask web application.
+
+---
+
+## 1. Project Overview & Context
+
+The original project is a **C# Windows Forms** application designed to communicate with **Densi Industrial Weighing Systems** (Densi Endüstriyel Tartı Sistemleri) scales via a local network connection (TCP/IP).
+
+### Key Parameters
+* **Default IP Address:** `10.10.100.254` (Configurable via UI)
+* **Default Port:** `8899` (Configurable via UI)
+* **Encoding:** ASCII
+* **Data Flow:** Uni-directional stream (Scale $\rightarrow$ Client)
+
+---
+
+## 2. C# Client Analysis
+
+The C# application logic is simple but robust:
+
+```mermaid
+sequenceDiagram
+    participant Scale as Scale (TCP Server)
+    participant UI as Windows Form UI
+    participant Thread as Background Thread (Client_Read)
+    
+    UI->>Scale: TCP Connect (async task)
+    Scale-->>UI: Connection Established
+    UI->>Thread: Start Thread
+    loop Every loop iteration
+        Thread->>Scale: Read Stream (1024 bytes buffer)
+        Scale-->>Thread: Raw ASCII bytes
+        Thread->>UI: Append decoded text to UI (via Invoke)
+    end
+```
+
+### Technical Workflow
+1. **Asynchronous Connection:** A connection is initiated using `TcpClient.ConnectAsync` (wrapped in a task) to prevent blocking the GUI.
+2. **Dedicated Read Thread:** Once connected, a dedicated background thread (`t_Client`) is created to read from the TCP stream synchronously using a buffer size of `1024` bytes.
+3. **Data Translation:** The byte array is decoded into a string using `System.Text.Encoding.ASCII.GetString(TCP_data_Client)`.
+4. **Thread-Safe UI Updates:** Because background threads cannot modify the main UI thread's controls directly, `tb_Read.Invoke()` is used to append the data.
+
+---
+
+## 3. Python equivalent (Socket Communication)
+
+In Python, the networking core can be implemented using the built-in `socket` library. Below is a direct translation of the C# client's behavior:
+
+```python
+import socket
+import threading
+
+class ScaleClient:
+    def __init__(self, ip="10.10.100.254", port=8899):
+        self.ip = ip
+        self.port = int(port)
+        self.sock = None
+        self.is_connected = False
+        self.read_thread = None
+
+    def connect(self):
+        try:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # 5-second timeout to prevent infinite blocking on connect
+            self.sock.settimeout(5.0) 
+            self.sock.connect((self.ip, self.port))
+            self.is_connected = True
+            
+            # Start background reading thread
+            self.read_thread = threading.Thread(target=self._read_loop, daemon=True)
+            self.read_thread.start()
+            print(f"Connected to scale at {self.ip}:{self.port}")
+            return True
+        except Exception as e:
+            print(f"Connection failed: {e}")
+            self.is_connected = False
+            return False
+
+    def _read_loop(self):
+        self.sock.settimeout(None) # Reset timeout for blocking read loop
+        while self.is_connected:
+            try:
+                data = self.sock.recv(1024)
+                if not data:
+                    print("Connection closed by server.")
+                    break
+                
+                # Decode using ASCII
+                decoded_str = data.decode('ascii', errors='ignore')
+                self.on_data_received(decoded_str)
+            except Exception as e:
+                print(f"Error in read loop: {e}")
+                break
+        
+        self.is_connected = False
+        if self.sock:
+            self.sock.close()
+
+    def on_data_received(self, data_str):
+        # Callback to handle raw weight string (e.g. parse out weight value)
+        print(f"Received: {repr(data_str)}")
+
+    def disconnect(self):
+        self.is_connected = False
+        if self.sock:
+            self.sock.close()
+```
+
+---
+
+## 4. Flask Integration Strategy
+
+Since Flask is a web server framework (request-response pattern), we cannot run an infinite blocking TCP client loop directly inside a Flask request handler. Doing so would freeze the server.
+
+Instead, we need one of the following architectural patterns depending on requirements:
+
+### Pattern A: Background Thread + Server-Sent Events (SSE) or WebSockets
+*Ideal for real-time dashboards showing live, updates of scale weights.*
+
+1. **Background Service:** A singleton background thread manages the TCP socket connection to the scale.
+2. **State Management:** The background thread parses the incoming string and updates a global or shared variable containing the current weight.
+3. **WebSockets / SSE:** The client (browser) connects to a WebSocket route or SSE route. The Flask server continuously broadcasts the current weight to the client in real-time.
+
+```mermaid
+graph TD
+    Scale[Scale Server] -- TCP Stream --> Client[Python TCP Client Thread]
+    Client -- Updates --> SharedState[Shared State / Cache]
+    SharedState -- Reads --> Flask[Flask Web App]
+    Flask -- SSE / WebSockets --> Browser[Client Browser UI]
+```
+
+### Pattern B: On-Demand Reading
+*Ideal for forms where you press a "Get Weight" button to capture the weight at a specific moment.*
+
+1. **API Endpoint:** An API endpoint `/api/get-weight` is created.
+2. **Short-lived Socket:** When requested, Flask opens a quick connection, reads the first valid weight data block from the buffer, parses it, closes the socket, and returns the weight as JSON.
+3. **Frontend:** Javascript runs a `fetch()` to `/api/get-weight` when the user clicks the button.
+
+---
+
+## 5. Industrial Scale Data Parsing (Gotchas & Recommendations)
+
+* **Continuous Streams:** Scales typically send weight packets continuously (e.g., `ST,GS,+  124.5 kg\r\n` or similar formats depending on the protocol). 
+* **Data Framing:** When reading bytes, a packet might be split across reads. We should accumulate bytes and split them by the delimiter (usually Carriage Return `\r` and Line Feed `\n`) to get complete packages.
+* **Regular Expressions:** Using regex to extract the numeric weight value makes parsing reliable and resilient to protocol variations.

@@ -1,0 +1,876 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Users, Scale, FileText, Activity, 
+  CheckCircle, AlertTriangle, Settings, 
+  Play, LogOut, LayoutDashboard,
+  Plus, ArrowLeft, Trash2, Folder, ChevronRight, Save, RotateCcw, Wifi, WifiOff, Filter, X, UserPlus, UserMinus, Key, User, Download, Upload
+} from 'lucide-react';
+
+// --- MOCK VERİLER ---
+const INITIAL_DATA = {
+  users: [
+    { id: 1, name: "Üretim Müdürü", role: "admin", pass: "1234" },
+    { id: 2, name: "Ahmet Usta", role: "operator", pass: "1111" },
+    { id: 3, name: "Mehmet Usta", role: "operator", pass: "2222" }
+  ],
+  scales: [
+    { id: 1, name: "Ana Karışım Mikseri", ip: "192.168.1.50", port: 8080, status: true },
+    { id: 2, name: "Hassas Baharat Terazisi", ip: "192.168.1.51", port: 23, status: true }
+  ],
+  firms: [
+    { id: 1, name: "Lezzet Et Dünyası" },
+    { id: 2, name: "Tavukçum Gıda" },
+    { id: 3, name: "Anadolu Gurme" }
+  ],
+  recipes: [
+    { 
+      id: 1, firmId: 1, name: "Özel Kasap Köfte Harcı", baseAmount: 100,
+      items: [
+        { id: 1, name: "Galeta Unu (Baz)", amount: 60, tolerance: 0.5 },
+        { id: 2, name: "Tuz", amount: 15, tolerance: 0.2 },
+        { id: 3, name: "Kimyon", amount: 10, tolerance: 0.1 },
+        { id: 4, name: "Karabiber", amount: 5, tolerance: 0.05 }
+      ] 
+    },
+    { 
+      id: 2, firmId: 2, name: "Acı Cajun Çeşnisi (Tavuk)", baseAmount: 100, 
+      items: [
+        { id: 1, name: "Paprika", amount: 40, tolerance: 0.2 },
+        { id: 2, name: "Sarımsak Tozu", amount: 20, tolerance: 0.1 },
+        { id: 3, name: "Acı Pul Biber", amount: 10, tolerance: 0.1 }
+      ] 
+    }
+  ],
+  orders: [], 
+  logs: []   
+};
+
+export default function App() {
+  const [view, setView] = useState('login'); 
+  const [currentUser, setCurrentUser] = useState(null);
+  
+  // LOGIN STATE
+  const [loginStep, setLoginStep] = useState('role_select'); 
+  
+  const [db, setDb] = useState(() => {
+    const savedData = localStorage.getItem('appData');
+    return savedData ? JSON.parse(savedData) : INITIAL_DATA;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('appData', JSON.stringify(db));
+  }, [db]);
+  
+  // -- Admin Navigation --
+  const [adminTab, setAdminTab] = useState('orders'); 
+  
+  // -- Recipe Editor --
+  const [activeFirmId, setActiveFirmId] = useState(null);
+  const [activeRecipeId, setActiveRecipeId] = useState(null);
+
+  // -- Order Creation --
+  const [orderSelectedFirmId, setOrderSelectedFirmId] = useState("");
+
+  // -- Reports Filter State --
+  const [reportFilters, setReportFilters] = useState({
+    startDate: "",
+    endDate: "",
+    operator: "",
+    firm: "",
+    recipe: ""
+  });
+
+  // -- Operator State --
+  const [selectedScale, setSelectedScale] = useState(null);
+  const [activeJob, setActiveJob] = useState(null);
+  const [weighingStep, setWeighingStep] = useState(0); 
+  const [scaleValue, setScaleValue] = useState(0); 
+  const [tareValue, setTareValue] = useState(0);   
+  const [showWarning, setShowWarning] = useState(false); 
+
+  // -- File Import Ref --
+  const fileInputRef = useRef(null);
+
+  // --- DOSYA İŞLEMLERİ (YENİ) ---
+
+  const exportData = () => {
+    const jsonString = JSON.stringify(db, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = `baharat_sistemi_yedek_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const importData = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          // Basit bir doğrulama yapalım
+          if (data.users && data.recipes && data.firms) {
+            setDb(data);
+            alert("Yedek dosyası başarıyla yüklendi! Sistem güncellendi.");
+          } else {
+            alert("Hatalı dosya formatı! Lütfen bu sistemden alınan bir JSON dosyası yükleyin.");
+          }
+        } catch (error) {
+          alert("Dosya okunamadı! Hata: " + error.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current.click();
+  };
+
+  // --- GİRİŞ SİSTEMİ ---
+  
+  const handleAdminLogin = (user, password) => {
+    if (user.pass === password) {
+      setCurrentUser(user);
+      setView(user.role);
+      setLoginStep('role_select');
+    } else {
+      alert("Hatalı şifre!");
+    }
+  };
+
+  const handleOperatorLogin = (e) => {
+    e.preventDefault();
+    const nameInput = e.target.username.value.trim();
+    const passInput = e.target.password.value.trim();
+    
+    const user = db.users.find(u => u.role === 'operator' && u.name.toLowerCase() === nameInput.toLowerCase());
+
+    if (user && user.pass === passInput) {
+      setCurrentUser(user);
+      setView('operator');
+      setLoginStep('role_select');
+    } else {
+      alert("Hatalı Kullanıcı Adı veya Şifre!");
+    }
+  };
+
+  const logout = () => {
+    setCurrentUser(null); setView('login');
+    setLoginStep('role_select');
+    setActiveJob(null); setWeighingStep(0); setScaleValue(0); setTareValue(0);
+    setActiveFirmId(null); setActiveRecipeId(null);
+  };
+
+  const resetData = () => {
+    if(window.confirm("DİKKAT! Tüm veriler silinip fabrika ayarlarına dönecek. Emin misiniz?")) {
+      setDb(INITIAL_DATA);
+      alert("Veriler sıfırlandı.");
+    }
+  };
+
+  // --- VERİ YÖNETİM FONKSİYONLARI ---
+  const addUser = (name, password) => {
+    const newUser = { id: Date.now(), name, role: 'operator', pass: password };
+    setDb(prev => ({ ...prev, users: [...prev.users, newUser] }));
+    alert(`${name} isimli usta başarıyla eklendi.`);
+  };
+
+  const deleteUser = (id) => {
+    if(window.confirm("Bu personeli silmek istediğinize emin misiniz?")) {
+      setDb(prev => ({ ...prev, users: prev.users.filter(u => u.id !== id) }));
+    }
+  };
+
+  const addScale = (name, ip, port) => {
+    const newScale = { id: Date.now(), name, ip, port, status: true };
+    setDb(prev => ({ ...prev, scales: [...prev.scales, newScale] }));
+    alert(`Bağlantı Testi Başarılı!\nCihaz IP: ${ip}:${port}\nGelen Veri: ST,GS,+ 0.00kg\n\n"${name}" sisteme eklendi.`);
+  };
+
+  const deleteScale = (id) => {
+    if(window.confirm("Bu teraziyi silmek istediğinize emin misiniz?")) {
+      setDb(prev => ({ ...prev, scales: prev.scales.filter(s => s.id !== id) }));
+    }
+  };
+
+  const addFirm = (name) => {
+    const newFirm = { id: Date.now(), name };
+    setDb(prev => ({ ...prev, firms: [...prev.firms, newFirm] }));
+  };
+
+  const addRecipeToFirm = (firmId, name) => {
+    const newRecipe = { id: Date.now(), firmId, name, baseAmount: 100, items: [] };
+    setDb(prev => ({ ...prev, recipes: [...prev.recipes, newRecipe] }));
+  };
+
+  const addIngredientToRecipe = (recipeId, name, amount, tolerance) => {
+    const newItem = { id: Date.now(), name, amount: parseFloat(amount), tolerance: parseFloat(tolerance) };
+    const updatedRecipes = db.recipes.map(r => r.id === recipeId ? { ...r, items: [...r.items, newItem] } : r);
+    setDb(prev => ({ ...prev, recipes: updatedRecipes }));
+  };
+
+  const deleteIngredient = (recipeId, itemId) => {
+    const updatedRecipes = db.recipes.map(r => r.id === recipeId ? { ...r, items: r.items.filter(i => i.id !== itemId) } : r);
+    setDb(prev => ({ ...prev, recipes: updatedRecipes }));
+  };
+
+  const createOrder = (firmId, recipeId, totalAmount, batchCount) => {
+    const firm = db.firms.find(f => f.id === parseInt(firmId));
+    const recipe = db.recipes.find(r => r.id === parseInt(recipeId));
+    const batchSize = totalAmount / batchCount;
+    
+    const newOrder = {
+      id: Date.now(),
+      customer: firm.name,
+      recipeName: recipe.name,
+      recipeItems: recipe.items, 
+      totalAmount,
+      batches: Array.from({ length: batchCount }).map((_, i) => ({
+        id: `B${Date.now()}-${i+1}`,
+        no: i + 1,
+        totalBatches: batchCount,
+        targetAmount: batchSize,
+        status: 'Bekliyor',
+        operator: null
+      }))
+    };
+    setDb(prev => ({ ...prev, orders: [...prev.orders, newOrder] }));
+  };
+
+  const startJob = (orderId, batchId) => {
+    const updatedOrders = db.orders.map(order => order.id === orderId ? {
+      ...order,
+      batches: order.batches.map(batch => batch.id === batchId ? { ...batch, status: 'Üretiliyor', operator: currentUser.name } : batch)
+    } : order);
+    
+    setDb(prev => ({ ...prev, orders: updatedOrders }));
+    const order = db.orders.find(o => o.id === orderId);
+    const batch = order.batches.find(b => b.id === batchId);
+    setActiveJob({ order, batch });
+    setWeighingStep(0); setTareValue(0); setScaleValue(0);
+  };
+
+  const confirmWeighing = (force = false) => {
+    const currentItem = activeJob.order.recipeItems[weighingStep];
+    const scaleFactor = activeJob.batch.targetAmount / 100;
+    const target = currentItem.amount * scaleFactor;
+    const currentNet = scaleValue - tareValue;
+    const diff = Math.abs(currentNet - target);
+    const isWithinTolerance = diff <= currentItem.tolerance;
+
+    if (!isWithinTolerance && !force) {
+      setShowWarning(true); return;
+    }
+
+    const log = {
+      batchId: activeJob.batch.id, 
+      operator: currentUser.name,
+      customer: activeJob.order.customer, 
+      recipe: activeJob.order.recipeName, 
+      item: currentItem.name, 
+      target: target.toFixed(2), 
+      actual: currentNet.toFixed(2),
+      status: isWithinTolerance ? 'Başarılı' : 'Hatalı', 
+      timestamp: new Date().toISOString()
+    };
+
+    setDb(prev => ({ ...prev, logs: [...prev.logs, log] }));
+    setShowWarning(false);
+
+    if (weighingStep < activeJob.order.recipeItems.length - 1) {
+      setTareValue(scaleValue); setWeighingStep(prev => prev + 1);
+    } else {
+      finishJob();
+    }
+  };
+
+  const finishJob = () => {
+    alert("Üretim Tamamlandı!");
+    const updatedOrders = db.orders.map(order => order.id === activeJob.order.id ? {
+      ...order,
+      batches: order.batches.map(batch => batch.id === activeJob.batch.id ? { ...batch, status: 'Tamamlandı' } : batch)
+    } : order);
+    setDb(prev => ({ ...prev, orders: updatedOrders }));
+    setActiveJob(null);
+  };
+
+  // --- GÖRÜNÜMLER ---
+
+  if (view === 'login') {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-900 text-white">
+        <div className="w-96 p-8 bg-slate-800 rounded-lg shadow-xl border border-slate-700">
+          <h1 className="text-2xl font-bold mb-6 text-center text-orange-400">Baharat Reçete Sistemi</h1>
+          
+          {loginStep === 'role_select' && (
+            <div className="space-y-4">
+              <button onClick={() => setLoginStep('admin_login')} className="w-full p-4 bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center justify-center gap-2 font-semibold transition-colors">
+                <Settings size={20} /> Yönetici Girişi
+              </button>
+              <button onClick={() => setLoginStep('operator_login')} className="w-full p-4 bg-orange-600 hover:bg-orange-700 rounded-lg flex items-center justify-center gap-2 font-semibold transition-colors">
+                <Users size={20} /> Usta/Operatör Girişi
+              </button>
+            </div>
+          )}
+
+          {loginStep === 'admin_login' && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-4 text-gray-400 cursor-pointer hover:text-white" onClick={() => setLoginStep('role_select')}>
+                <ArrowLeft size={16} /> Geri Dön
+              </div>
+              <h2 className="text-center text-lg font-bold mb-4">Yönetici Seçimi</h2>
+              <div className="space-y-2">
+                {db.users.filter(u => u.role === 'admin').map(user => (
+                   <div key={user.id} className="bg-slate-700 p-3 rounded flex flex-col gap-2">
+                      <div className="font-bold">{user.name}</div>
+                      <form onSubmit={(e) => { e.preventDefault(); handleAdminLogin(user, e.target.pass.value); }} className="flex gap-2">
+                         <input name="pass" type="password" placeholder="Şifre" className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 text-sm h-8 text-white" autoFocus />
+                         <button className="bg-blue-600 hover:bg-blue-500 px-3 rounded text-sm h-8 font-bold">GİR</button>
+                      </form>
+                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {loginStep === 'operator_login' && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-4 text-gray-400 cursor-pointer hover:text-white" onClick={() => setLoginStep('role_select')}>
+                <ArrowLeft size={16} /> Geri Dön
+              </div>
+              <h2 className="text-center text-lg font-bold mb-4 flex items-center justify-center gap-2"><User size={20}/> Usta Girişi</h2>
+              
+              <form onSubmit={handleOperatorLogin} className="flex flex-col gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Usta Adı / Kullanıcı Adı</label>
+                    <div className="relative">
+                      <input name="username" className="w-full bg-slate-700 border border-slate-600 rounded p-3 pl-10 text-white focus:border-orange-500 outline-none transition-colors" placeholder="Adınızı giriniz" required autoFocus />
+                      <Users size={18} className="absolute left-3 top-3.5 text-gray-400"/>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Şifre</label>
+                    <div className="relative">
+                      <input name="password" type="password" className="w-full bg-slate-700 border border-slate-600 rounded p-3 pl-10 text-white focus:border-orange-500 outline-none transition-colors" placeholder="Şifrenizi giriniz" required />
+                      <Key size={18} className="absolute left-3 top-3.5 text-gray-400"/>
+                    </div>
+                  </div>
+                  
+                  <button className="w-full bg-orange-600 hover:bg-orange-500 p-3 rounded font-bold text-white shadow-lg shadow-orange-900/50 transition-all mt-2">
+                    GİRİŞ YAP
+                  </button>
+              </form>
+            </div>
+          )}
+
+          <div className="mt-8 pt-4 border-t border-slate-700 text-center text-xs text-slate-500">
+             <p>Verileriniz tarayıcıda otomatik kaydedilmektedir.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- YÖNETİCİ PANELİ ---
+  if (view === 'admin') {
+    const filteredLogs = db.logs.filter(log => {
+        const logDate = new Date(log.timestamp);
+        const start = reportFilters.startDate ? new Date(reportFilters.startDate) : null;
+        const end = reportFilters.endDate ? new Date(reportFilters.endDate) : null;
+        if (end) end.setHours(23, 59, 59);
+
+        const dateMatch = (!start || logDate >= start) && (!end || logDate <= end);
+        const operatorMatch = !reportFilters.operator || log.operator === reportFilters.operator;
+        const firmMatch = !reportFilters.firm || (log.customer && log.customer === reportFilters.firm);
+        const recipeMatch = !reportFilters.recipe || (log.recipe && log.recipe === reportFilters.recipe);
+
+        return dateMatch && operatorMatch && firmMatch && recipeMatch;
+    }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    return (
+      <div className="min-h-screen bg-gray-100 flex">
+        {/* Sidebar */}
+        <div className="w-64 bg-slate-800 text-white flex flex-col">
+          <div className="p-6 text-xl font-bold border-b border-slate-700">Admin Panel</div>
+          <nav className="flex-1 p-4 space-y-2">
+            <button onClick={() => setAdminTab('orders')} className={`w-full text-left p-3 rounded flex gap-2 ${adminTab === 'orders' ? 'bg-orange-600' : 'hover:bg-slate-700'}`}><LayoutDashboard size={18}/> Sipariş Yönetimi</button>
+            <button onClick={() => { setAdminTab('recipes'); setActiveFirmId(null); setActiveRecipeId(null); }} className={`w-full text-left p-3 rounded flex gap-2 ${adminTab === 'recipes' ? 'bg-orange-600' : 'hover:bg-slate-700'}`}><FileText size={18}/> Reçeteler</button>
+            <button onClick={() => setAdminTab('users')} className={`w-full text-left p-3 rounded flex gap-2 ${adminTab === 'users' ? 'bg-orange-600' : 'hover:bg-slate-700'}`}><Users size={18}/> Personel (Usta)</button>
+            <button onClick={() => setAdminTab('scales')} className={`w-full text-left p-3 rounded flex gap-2 ${adminTab === 'scales' ? 'bg-orange-600' : 'hover:bg-slate-700'}`}><Scale size={18}/> Teraziler</button>
+            <button onClick={() => setAdminTab('reports')} className={`w-full text-left p-3 rounded flex gap-2 ${adminTab === 'reports' ? 'bg-orange-600' : 'hover:bg-slate-700'}`}><Activity size={18}/> Raporlar</button>
+          </nav>
+          
+          <div className="px-4 pb-2 space-y-2 border-t border-slate-700 pt-4">
+            <div className="text-xs font-bold text-gray-500 uppercase px-2 mb-1">Veri Yönetimi</div>
+            
+            <button onClick={exportData} className="w-full p-2 bg-slate-700 text-gray-300 text-xs rounded hover:bg-slate-600 flex items-center gap-2">
+              <Download size={14}/> Yedek Al (İndir)
+            </button>
+            
+            <button onClick={handleImportClick} className="w-full p-2 bg-slate-700 text-gray-300 text-xs rounded hover:bg-slate-600 flex items-center gap-2">
+              <Upload size={14}/> Yedek Yükle
+            </button>
+            <input type="file" ref={fileInputRef} onChange={importData} accept=".json" className="hidden" />
+
+            <button onClick={resetData} className="w-full p-2 bg-red-900/50 text-red-300 text-xs rounded hover:bg-red-900 flex items-center gap-2 mt-4">
+              <RotateCcw size={14}/> Verileri Sıfırla
+            </button>
+          </div>
+          <button onClick={logout} className="m-4 p-3 bg-red-600 hover:bg-red-700 rounded flex items-center justify-center gap-2"><LogOut size={18}/> Çıkış</button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 p-8 overflow-y-auto">
+          
+          {/* PERSONEL YÖNETİMİ */}
+          {adminTab === 'users' && (
+             <div className="bg-white p-6 rounded-lg shadow">
+               <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><Users size={24}/> Personel & Usta Yönetimi</h2>
+               
+               <div className="mb-8 p-6 border rounded-xl bg-gray-50">
+                  <h3 className="font-bold text-gray-700 mb-4">Yeni Usta Ekle</h3>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    addUser(e.target.name.value, e.target.pass.value);
+                    e.target.reset();
+                  }} className="flex gap-4 items-end">
+                     <div className="flex-1">
+                        <label className="text-xs font-bold text-gray-500 mb-1 block">Usta Adı Soyadı</label>
+                        <input name="name" placeholder="Örn: Veli Usta" className="border p-3 rounded w-full" required />
+                     </div>
+                     <div className="w-48">
+                        <label className="text-xs font-bold text-gray-500 mb-1 block">Şifre</label>
+                        <input name="pass" type="text" placeholder="1234" className="border p-3 rounded w-full" required />
+                     </div>
+                     <button className="bg-green-600 text-white px-6 py-3 rounded font-bold hover:bg-green-700 flex items-center gap-2">
+                        <UserPlus size={18} /> Kaydet
+                     </button>
+                  </form>
+               </div>
+
+               <h3 className="font-bold text-gray-700 mb-4">Kayıtlı Personel Listesi</h3>
+               <table className="w-full text-sm text-left border">
+                  <thead className="bg-slate-100">
+                     <tr>
+                        <th className="p-3 border-b">Personel Adı</th>
+                        <th className="p-3 border-b">Rolü</th>
+                        <th className="p-3 border-b">Şifresi</th>
+                        <th className="p-3 border-b text-center">İşlem</th>
+                     </tr>
+                  </thead>
+                  <tbody>
+                     {db.users.map(u => (
+                        <tr key={u.id} className="hover:bg-slate-50">
+                           <td className="p-3 border-b font-bold">{u.name}</td>
+                           <td className="p-3 border-b">
+                              <span className={`px-2 py-1 rounded text-xs ${u.role === 'admin' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
+                                 {u.role === 'admin' ? 'Yönetici' : 'Usta/Operatör'}
+                              </span>
+                           </td>
+                           <td className="p-3 border-b font-mono text-gray-500">{u.pass}</td>
+                           <td className="p-3 border-b text-center">
+                              {u.role !== 'admin' && (
+                                 <button onClick={() => deleteUser(u.id)} className="text-red-500 hover:bg-red-100 p-2 rounded" title="Sil">
+                                    <Trash2 size={18} />
+                                 </button>
+                              )}
+                           </td>
+                        </tr>
+                     ))}
+                  </tbody>
+               </table>
+             </div>
+          )}
+
+          {/* SİPARİŞ YÖNETİMİ */}
+          {adminTab === 'orders' && (
+            <div className="space-y-6">
+              <div className="bg-white p-6 rounded-lg shadow">
+                <h2 className="text-xl font-bold mb-4 text-slate-800">Yeni Üretim Emri Oluştur</h2>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  const fd = new FormData(e.target);
+                  createOrder(fd.get('firmId'), fd.get('recipeId'), parseFloat(fd.get('amount')), parseInt(fd.get('batches')));
+                  e.target.reset(); setOrderSelectedFirmId("");
+                  alert("Sipariş oluşturuldu.");
+                }} className="grid grid-cols-2 gap-4">
+                  <div className="col-span-1">
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Firma Seçin</label>
+                    <select name="firmId" required className="w-full border p-2 rounded" onChange={(e) => setOrderSelectedFirmId(parseInt(e.target.value))}>
+                      <option value="">Firma Seçiniz...</option>
+                      {db.firms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="col-span-1">
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Reçete (Ürün) Seçin</label>
+                    <select name="recipeId" required className="w-full border p-2 rounded" disabled={!orderSelectedFirmId}>
+                      <option value="">Önce Firma Seçin...</option>
+                      {db.recipes.filter(r => r.firmId === orderSelectedFirmId).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                  </div>
+                  <input name="amount" type="number" placeholder="Toplam Sipariş (kg)" required className="border p-2 rounded" />
+                  <select name="batches" className="border p-2 rounded">
+                    <option value="1">Tek Seferde</option>
+                    <option value="2">2 Parti</option>
+                    <option value="4">4 Parti</option>
+                    <option value="5">5 Parti</option>
+                  </select>
+                  <button type="submit" className="col-span-2 bg-orange-600 text-white p-2 rounded font-bold hover:bg-orange-700">Siparişi Oluştur ve Böl</button>
+                </form>
+              </div>
+              <div className="bg-white p-6 rounded-lg shadow">
+                <h3 className="font-bold mb-4">Aktif İş Emirleri</h3>
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50"><tr><th className="p-2">Firma</th><th className="p-2">Reçete</th><th className="p-2">Parti</th><th className="p-2">Durum</th></tr></thead>
+                  <tbody>
+                    {db.orders.flatMap(o => o.batches.map(b => ({...b, customer: o.customer, recipe: o.recipeName}))).map((batch) => (
+                      <tr key={batch.id} className="border-t">
+                        <td className="p-2 font-semibold">{batch.customer}</td>
+                        <td className="p-2">{batch.recipe}</td>
+                        <td className="p-2">P{batch.no} ({batch.targetAmount} kg)</td>
+                        <td className="p-2"><span className="bg-gray-100 px-2 rounded text-xs">{batch.status}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* REÇETE YÖNETİMİ */}
+          {adminTab === 'recipes' && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+                 <span className={!activeFirmId ? "font-bold text-orange-600" : "cursor-pointer hover:underline"} onClick={() => { setActiveFirmId(null); setActiveRecipeId(null); }}>Firmalar</span>
+                 {activeFirmId && <ChevronRight size={14} />}
+                 {activeFirmId && <span className={!activeRecipeId ? "font-bold text-orange-600" : "cursor-pointer hover:underline"} onClick={() => setActiveRecipeId(null)}>{db.firms.find(f => f.id === activeFirmId)?.name}</span>}
+                 {activeRecipeId && <ChevronRight size={14} />}
+                 {activeRecipeId && <span className="font-bold text-orange-600">{db.recipes.find(r => r.id === activeRecipeId)?.name}</span>}
+              </div>
+
+              {!activeFirmId && (
+                <div className="bg-white p-6 rounded-lg shadow">
+                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><Users size={24}/> Firmalar</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    {db.firms.map(firm => (
+                      <button key={firm.id} onClick={() => setActiveFirmId(firm.id)} className="p-6 border-2 border-slate-200 rounded-xl hover:border-orange-500 hover:bg-orange-50 transition-all text-left group">
+                        <div className="font-bold text-lg text-slate-800 group-hover:text-orange-700">{firm.name}</div>
+                        <div className="text-sm text-slate-500 mt-1">{db.recipes.filter(r => r.firmId === firm.id).length} Ürün/Reçete Kayıtlı</div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t pt-4">
+                    <h3 className="text-sm font-bold text-gray-500 mb-2">Yeni Firma Ekle</h3>
+                    <form onSubmit={(e) => { e.preventDefault(); addFirm(e.target.firmName.value); e.target.reset(); }} className="flex gap-2">
+                      <input name="firmName" placeholder="Firma Adı Giriniz..." required className="border p-2 rounded flex-1" />
+                      <button className="bg-slate-800 text-white px-4 rounded hover:bg-slate-700 flex items-center gap-2"><Plus size={16}/> Ekle</button>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {activeFirmId && !activeRecipeId && (
+                <div className="bg-white p-6 rounded-lg shadow">
+                  <div className="flex items-center gap-4 mb-6">
+                    <button onClick={() => setActiveFirmId(null)} className="p-2 hover:bg-gray-100 rounded-full"><ArrowLeft size={20}/></button>
+                    <h2 className="text-xl font-bold">{db.firms.find(f => f.id === activeFirmId).name} - Ürünleri</h2>
+                  </div>
+                  <div className="space-y-2 mb-6">
+                    {db.recipes.filter(r => r.firmId === activeFirmId).map(recipe => (
+                      <div key={recipe.id} className="flex justify-between items-center p-4 border rounded hover:bg-gray-50 cursor-pointer" onClick={() => setActiveRecipeId(recipe.id)}>
+                        <div className="flex items-center gap-3"><Folder className="text-orange-500" /><span className="font-bold text-lg">{recipe.name}</span></div>
+                        <div className="text-sm text-gray-500">{recipe.items.length} Hammadde</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="border-t pt-4 bg-gray-50 p-4 rounded">
+                    <h3 className="text-sm font-bold text-gray-500 mb-2">Bu Firmaya Yeni Ürün Tanımla</h3>
+                    <form onSubmit={(e) => { e.preventDefault(); addRecipeToFirm(activeFirmId, e.target.recipeName.value); e.target.reset(); }} className="flex gap-2">
+                      <input name="recipeName" placeholder="Ürün Adı (Örn: Dana Sucuk)" required className="border p-2 rounded flex-1" />
+                      <button className="bg-orange-600 text-white px-4 rounded hover:bg-orange-700 flex items-center gap-2"><Plus size={16}/> Ürünü Oluştur</button>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {activeRecipeId && (
+                <div className="bg-white p-6 rounded-lg shadow">
+                  <div className="flex items-center gap-4 mb-6">
+                    <button onClick={() => setActiveRecipeId(null)} className="p-2 hover:bg-gray-100 rounded-full"><ArrowLeft size={20}/></button>
+                    <div>
+                      <h2 className="text-xl font-bold text-orange-600">{db.recipes.find(r => r.id === activeRecipeId).name}</h2>
+                      <p className="text-xs text-gray-500">100 KG BAZ ALINARAK HAZIRLANAN KARIŞIM LİSTESİ</p>
+                    </div>
+                  </div>
+                  <table className="w-full text-sm mb-6">
+                    <thead className="bg-slate-100 text-slate-600">
+                      <tr><th className="p-3 text-left">Sıra</th><th className="p-3 text-left">Hammadde</th><th className="p-3 text-left">Miktar (100kg için)</th><th className="p-3 text-left">Tolerans (±)</th><th className="p-3 text-center">İşlem</th></tr>
+                    </thead>
+                    <tbody>
+                      {db.recipes.find(r => r.id === activeRecipeId).items.map((item, idx) => (
+                        <tr key={item.id} className="border-b hover:bg-gray-50">
+                          <td className="p-3 font-mono text-gray-400">{idx + 1}</td>
+                          <td className="p-3 font-bold">{item.name}</td>
+                          <td className="p-3 font-mono text-blue-600">{item.amount} kg</td>
+                          <td className="p-3 font-mono text-gray-500">±{item.tolerance}</td>
+                          <td className="p-3 text-center"><button onClick={() => deleteIngredient(activeRecipeId, item.id)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 size={16}/></button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="bg-orange-50 p-4 rounded border border-orange-100">
+                    <h3 className="text-sm font-bold text-orange-800 mb-2">Listeye Baharat Ekle</h3>
+                    <form onSubmit={(e) => { 
+                      e.preventDefault(); 
+                      const fd = new FormData(e.target);
+                      addIngredientToRecipe(activeRecipeId, fd.get('name'), fd.get('amount'), fd.get('tolerance'));
+                      e.target.reset();
+                    }} className="grid grid-cols-4 gap-2 items-end">
+                      <div className="col-span-2"><label className="text-xs text-gray-500">Hammadde Adı</label><input name="name" required className="w-full border p-2 rounded" /></div>
+                      <div><label className="text-xs text-gray-500">Miktar (kg)</label><input name="amount" type="number" step="0.01" required className="w-full border p-2 rounded" /></div>
+                      <div><label className="text-xs text-gray-500">Tolerans</label><div className="flex gap-2"><input name="tolerance" type="number" step="0.01" required className="w-full border p-2 rounded" /><button className="bg-green-600 text-white px-4 rounded hover:bg-green-700"><Plus size={20}/></button></div></div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TERAZİLER */}
+          {adminTab === 'scales' && (
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><Scale size={24}/> Terazi Tanımlama & Test</h2>
+              <div className="mb-8 p-6 border rounded-xl bg-gray-50">
+                <h3 className="font-bold text-gray-700 mb-4">Yeni Cihaz Ekle</h3>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  const fd = new FormData(e.target);
+                  addScale(fd.get('name'), fd.get('ip'), fd.get('port'));
+                  e.target.reset();
+                }} className="flex gap-4 items-end">
+                  <div className="flex-1"><label className="text-xs font-bold text-gray-500 mb-1 block">Cihaz Adı</label><input name="name" className="border p-3 rounded w-full" required /></div>
+                  <div className="flex-1"><label className="text-xs font-bold text-gray-500 mb-1 block">IP Adresi</label><input name="ip" className="border p-3 rounded w-full" required /></div>
+                  <div className="w-24"><label className="text-xs font-bold text-gray-500 mb-1 block">Port</label><input name="port" className="border p-3 rounded w-full" required /></div>
+                  <button className="bg-green-600 text-white px-6 py-3 rounded font-bold hover:bg-green-700">Test Et & Kaydet</button>
+                </form>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {db.scales.map(scale => (
+                  <div key={scale.id} className="border p-4 rounded-xl flex flex-col gap-2 relative group hover:shadow-md transition-shadow">
+                    <div className={`absolute top-4 right-4 flex items-center gap-2`}><span className={`w-3 h-3 rounded-full ${scale.status ? 'bg-green-500' : 'bg-red-500'}`}></span><button onClick={() => deleteScale(scale.id)} className="text-gray-300 hover:text-red-500"><Trash2 size={16}/></button></div>
+                    <div className="flex items-center gap-2 text-gray-800">{scale.status ? <Wifi size={20} className="text-green-600"/> : <WifiOff size={20} className="text-gray-400"/>}<div className="font-bold text-lg">{scale.name}</div></div>
+                    <div className="text-gray-500 text-sm font-mono ml-7">{scale.ip}:{scale.port}</div>
+                    <div className="mt-2 text-xs bg-slate-100 p-2 rounded font-mono text-slate-600">Son Veri: ST,GS,+ 0.00kg</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* RAPORLAR (GELİŞMİŞ FİLTRELEME İLE) */}
+          {adminTab === 'reports' && (
+             <div className="bg-white p-6 rounded-lg shadow space-y-6">
+               <div className="flex items-center justify-between">
+                 <h2 className="text-xl font-bold">Üretim Raporları</h2>
+                 <div className="text-xs text-gray-500">{filteredLogs.length} Kayıt Bulundu</div>
+               </div>
+               
+               {/* FİLTRE PANELİ */}
+               <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                  <div className="flex items-center gap-2 mb-3 text-slate-700 font-bold text-sm">
+                    <Filter size={16} /> FİLTRELEME SEÇENEKLERİ
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                     <div>
+                       <label className="text-xs font-bold text-gray-500 block mb-1">Başlangıç Tarihi</label>
+                       <input type="date" value={reportFilters.startDate} onChange={(e) => setReportFilters({...reportFilters, startDate: e.target.value})} className="w-full border p-2 rounded text-sm"/>
+                     </div>
+                     <div>
+                       <label className="text-xs font-bold text-gray-500 block mb-1">Bitiş Tarihi</label>
+                       <input type="date" value={reportFilters.endDate} onChange={(e) => setReportFilters({...reportFilters, endDate: e.target.value})} className="w-full border p-2 rounded text-sm"/>
+                     </div>
+                     <div>
+                       <label className="text-xs font-bold text-gray-500 block mb-1">Firma</label>
+                       <select value={reportFilters.firm} onChange={(e) => setReportFilters({...reportFilters, firm: e.target.value})} className="w-full border p-2 rounded text-sm">
+                         <option value="">Tümü</option>
+                         {db.firms.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
+                       </select>
+                     </div>
+                     <div>
+                       <label className="text-xs font-bold text-gray-500 block mb-1">Reçete</label>
+                       <select value={reportFilters.recipe} onChange={(e) => setReportFilters({...reportFilters, recipe: e.target.value})} className="w-full border p-2 rounded text-sm">
+                         <option value="">Tümü</option>
+                         {db.recipes.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                       </select>
+                     </div>
+                     <div>
+                       <label className="text-xs font-bold text-gray-500 block mb-1">Usta / Operatör</label>
+                       <select value={reportFilters.operator} onChange={(e) => setReportFilters({...reportFilters, operator: e.target.value})} className="w-full border p-2 rounded text-sm">
+                         <option value="">Tümü</option>
+                         {db.users.filter(u => u.role === 'operator').map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                       </select>
+                     </div>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                     <button onClick={() => setReportFilters({ startDate: "", endDate: "", operator: "", firm: "", recipe: "" })} className="text-red-600 text-xs font-bold flex items-center gap-1 hover:underline">
+                        <X size={12}/> FİLTRELERİ TEMİZLE
+                     </button>
+                  </div>
+               </div>
+
+               <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-800 text-white">
+                    <tr>
+                      <th className="p-3 text-left">Tarih / Saat</th>
+                      <th className="p-3 text-left">Firma</th>
+                      <th className="p-3 text-left">Reçete Adı</th>
+                      <th className="p-3 text-left">Usta</th>
+                      <th className="p-3 text-left">Hammadde</th>
+                      <th className="p-3 text-left">Hedef</th>
+                      <th className="p-3 text-left">Gerçekleşen</th>
+                      <th className="p-3 text-left">Durum</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLogs.map((log, i) => {
+                      // Tarih formatlama
+                      const d = new Date(log.timestamp);
+                      const isValidDate = !isNaN(d.getTime());
+                      const dateStr = isValidDate ? d.toLocaleDateString('tr-TR') : '-';
+                      const timeStr = isValidDate ? d.toLocaleTimeString('tr-TR') : log.timestamp;
+
+                      return (
+                        <tr key={i} className="border-b hover:bg-gray-50">
+                          <td className="p-3 text-gray-600">
+                             <div className="font-bold text-xs text-gray-800">{dateStr}</div>
+                             <div className="text-xs">{timeStr}</div>
+                          </td>
+                          <td className="p-3 font-semibold">{log.customer || '-'}</td>
+                          <td className="p-3">{log.recipe || '-'}</td>
+                          <td className="p-3">{log.operator}</td>
+                          <td className="p-3 font-mono text-xs">{log.item}</td>
+                          <td className="p-3">{log.target} kg</td>
+                          <td className="p-3">{log.actual} kg</td>
+                          <td className="p-3">
+                            <span className={`px-2 py-1 rounded text-xs font-bold ${log.status === 'Başarılı' ? 'text-green-600 bg-green-100' : 'text-red-600 bg-red-100'}`}>
+                              {log.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredLogs.length === 0 && <tr><td colSpan="8" className="p-8 text-center text-gray-500 italic">Kriterlere uygun kayıt bulunamadı.</td></tr>}
+                  </tbody>
+                </table>
+               </div>
+             </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // --- OPERATÖR ---
+  if (view === 'operator') {
+    if (!selectedScale) return (
+        <div className="h-screen bg-slate-900 text-white p-8 flex flex-col items-center justify-center relative">
+            <button onClick={logout} className="absolute top-8 right-8 bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded flex items-center gap-2 font-bold"><LogOut size={20} /> Çıkış Yap</button>
+            <h1 className="text-3xl mb-8 font-bold text-orange-400">İstasyon Seçimi</h1>
+            <div className="flex gap-6">
+                {db.scales.map(s => (
+                    <button key={s.id} onClick={() => setSelectedScale(s)} className="p-8 bg-slate-800 border-2 border-green-600 hover:bg-slate-700 rounded-xl text-2xl transition-all shadow-lg hover:shadow-green-900/50">
+                        {s.name}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+
+    if (!activeJob) {
+       const pendingBatches = db.orders.flatMap(o => o.batches.filter(b => b.status === 'Bekliyor').map(b => ({...b, customer: o.customer, recipeName: o.recipeName, orderId: o.id})));
+       return (
+        <div className="h-screen bg-slate-900 text-white p-8">
+          <div className="flex justify-between items-center mb-6">
+             <h1 className="text-2xl font-bold text-orange-400">Bekleyen İşler</h1>
+             <div className="flex items-center gap-4">
+                 <div className="text-right">
+                    <div className="text-xs text-gray-500">GİRİŞ YAPAN USTA</div>
+                    <div className="font-bold">{currentUser.name}</div>
+                 </div>
+                 <button onClick={logout} className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded flex items-center gap-2 font-bold"><LogOut size={18} /> Çıkış</button>
+             </div>
+          </div>
+          <div className="grid gap-4">
+             {pendingBatches.map(b => (
+                <div key={b.id} className="bg-slate-800 p-6 flex justify-between items-center rounded-lg border border-slate-700 shadow-lg">
+                   <div>
+                       <div className="text-orange-400 font-bold text-xl">{b.customer}</div>
+                       <div className="text-gray-300 text-lg">{b.recipeName} - {b.targetAmount} kg</div>
+                       <div className="text-sm text-gray-500 mt-1">Parti No: {b.no}</div>
+                   </div>
+                   <button onClick={() => startJob(b.orderId, b.id)} className="bg-green-600 hover:bg-green-500 px-6 py-3 rounded-lg font-bold flex items-center gap-2 text-lg"><Play size={20}/> BAŞLA</button>
+                </div>
+             ))}
+             {pendingBatches.length === 0 && <div className="text-center text-gray-500 py-10 italic">Şu an atanmış bir iş yok.</div>}
+          </div>
+          <button onClick={() => setSelectedScale(null)} className="mt-8 text-gray-400 hover:text-white flex items-center gap-2 border border-gray-600 p-3 rounded"><ArrowLeft size={18} /> İstasyon Seçimine Dön</button>
+       </div>
+       );
+    }
+
+    const currentItem = activeJob.order.recipeItems[weighingStep];
+    const scaleFactor = activeJob.batch.targetAmount / 100;
+    const targetAmount = currentItem.amount * scaleFactor;
+    const netWeight = scaleValue - tareValue;
+    const diff = netWeight - targetAmount;
+    let statusColor = "bg-slate-800";
+    if (netWeight > 0) {
+      if (Math.abs(diff) <= currentItem.tolerance) statusColor = "bg-green-600";
+      else if (netWeight < targetAmount) statusColor = "bg-yellow-600";
+      else statusColor = "bg-red-600";
+    }
+
+    return (
+      <div className="h-screen flex flex-col bg-slate-900 text-white">
+        <div className="p-4 bg-slate-800 flex justify-between items-center border-b border-slate-700">
+           <div><span className="text-orange-400 font-bold">{activeJob.order.customer}</span> <span className="text-gray-400 mx-2">|</span> <span>{activeJob.order.recipeName}</span></div>
+           <div className="flex items-center gap-4">
+               <div className="text-right"><div className="text-xs text-gray-500">USTA</div><div className="font-bold">{currentUser.name}</div></div>
+               <button onClick={() => { if(window.confirm("İşlem yarıda kesilecek. Çıkmak istiyor musunuz?")) logout(); }} className="bg-red-900/50 hover:bg-red-600 p-2 rounded text-red-200 hover:text-white transition-colors"><LogOut size={20}/></button>
+           </div>
+        </div>
+        <div className={`flex-1 flex flex-col items-center justify-center ${statusColor} transition-colors duration-300`}>
+           <div className="text-xl opacity-75 mb-2">SIRADAKİ ÜRÜN</div>
+           <h1 className="text-6xl font-bold mb-8 uppercase tracking-wider">{currentItem.name}</h1>
+           <div className="bg-black/20 p-8 rounded-xl backdrop-blur-sm min-w-[300px] text-center">
+               <div className="text-4xl text-orange-300 mb-2 font-mono">{targetAmount.toFixed(2)} kg</div>
+               <div className="text-xs text-gray-300 mb-6">HEDEF MİKTAR</div>
+               <div className="text-8xl font-mono font-bold">{netWeight.toFixed(2)}</div>
+               <div className="text-xl mt-2">kg</div>
+           </div>
+           {showWarning && <div className="absolute bg-black/90 inset-0 flex items-center justify-center z-50"><div className="bg-white text-black p-8 rounded-xl text-center max-w-md"><h2 className="text-3xl font-bold text-red-600 mb-4 flex justify-center gap-2"><AlertTriangle size={36}/> HATALI TARTIM</h2><p className="text-lg mb-6">Hedeflenen <b>{targetAmount.toFixed(2)}</b> iken <b>{netWeight.toFixed(2)}</b> tarttınız.</p><button onClick={() => confirmWeighing(true)} className="w-full bg-red-600 text-white px-6 py-3 rounded font-bold hover:bg-red-700">Yine de Kaydet</button><button onClick={() => setShowWarning(false)} className="w-full mt-3 bg-gray-200 text-gray-800 px-6 py-3 rounded font-bold hover:bg-gray-300">Geri Dön ve Düzelt</button></div></div>}
+        </div>
+        <div className="bg-slate-800 p-6 flex gap-6 items-center border-t border-slate-700">
+           <div className="flex-1 bg-slate-900 p-4 rounded-lg border border-slate-600">
+               <div className="text-xs text-yellow-500 font-bold mb-2 flex gap-2"><Settings size={14}/> TERAZİ SİMÜLATÖRÜ</div>
+               <input type="range" min={tareValue} max={tareValue + targetAmount + 2} step="0.05" value={scaleValue} onChange={(e) => setScaleValue(parseFloat(e.target.value))} className="w-full h-12 cursor-pointer accent-yellow-500"/>
+               <div className="flex justify-between text-xs text-gray-500 mt-1 font-mono"><span>Dara: {tareValue.toFixed(2)}</span><span>Brüt: {scaleValue.toFixed(2)}</span></div>
+           </div>
+           <button onClick={() => confirmWeighing(false)} className="h-24 px-12 bg-blue-600 hover:bg-blue-500 rounded-xl text-2xl font-bold shadow-lg shadow-blue-900/50 flex flex-col items-center justify-center min-w-[240px]">
+               <CheckCircle size={32} className="mb-1"/>
+               {weighingStep < activeJob.order.recipeItems.length - 1 ? 'ONAYLA' : 'BİTİR'}
+           </button>
+        </div>
+      </div>
+    );
+  }
+
+  return <div>Yükleniyor...</div>;
+}

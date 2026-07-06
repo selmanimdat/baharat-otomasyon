@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baharat Reçeteleme Otomasyonu</title>
+    <meta name="description" content="Endüstriyel baharat reçeteleme ve terazi tartım kontrol otomasyon yazılımı.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=Libre+Barcode+128&display=swap"
+        rel="stylesheet">
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="bg-slate-950 text-white font-sans antialiased">
+
+    <!-- APP CONTAINER -->
+    <div id="app-root" class="min-h-screen flex flex-col">
+
+        <!-- ==================== 1. LOGIN VIEW ==================== -->
+        <main id="view-login" class="flex-1 flex items-center justify-center p-4">
+            <div
+                class="card w-full max-w-md p-8 glass-card login-card border border-slate-800 shadow-2xl relative overflow-hidden">
+                <!-- Decorative background elements -->
+                <div class="absolute -top-10 -right-10 w-40 h-40 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"
+                    style="pointer-events: none;"></div>
+                <div class="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"
+                    style="pointer-events: none;"></div>
+
+                <header class="text-center mb-8">
+                    <div
+                        class="inline-flex p-3 bg-gradient-to-tr from-orange-600 to-amber-500 rounded-2xl shadow-lg shadow-orange-900/30 mb-4 animate-pulse">
+                        <i data-lucide="scale" class="w-8 h-8 text-white"></i>
+                    </div>
+                    <h1
+                        class="text-3xl font-extrabold font-outfit bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">
+                        Baharat Reçete Sistemi
+                    </h1>
+                    <p class="text-slate-400 text-sm mt-2">Güvenli üretim ve hassas tartım kontrol paneli</p>
+                </header>
+
+                <!-- STEP A: Role Selection -->
+                <div id="login-step-role" class="space-y-4">
+                    <button id="btn-select-admin"
+                        class="login-btn-select login-btn-select-admin w-full font-semibold text-lg transition-all">
+                        <i data-lucide="settings" class="w-5 h-5"></i> Yönetici Girişi
+                    </button>
+                    <button id="btn-select-operator"
+                        class="login-btn-select login-btn-select-operator w-full font-semibold text-lg transition-all">
+                        <i data-lucide="users" class="w-5 h-5"></i> Usta / Operatör Girişi
+                    </button>
+                </div>
+
+                <!-- STEP B: Admin Password -->
+                <div id="login-step-admin" class="hidden space-y-4">
+                    <button
+                        class="btn-back text-slate-400 hover:text-white flex items-center gap-2 text-sm font-medium">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i> Geri Dön
+                    </button>
+                    <h2 class="text-xl font-bold font-outfit text-slate-200">Yönetici Girişi</h2>
+                    
+                    <form id="form-admin-login" class="space-y-4">
+                        <div>
+                            <label for="admin-select-username"
+                                class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Yönetici Seçin</label>
+                            <div class="relative">
+                                <select id="admin-select-username" name="username" required
+                                    class="input-field pl-11 bg-slate-900 border-slate-800 text-white">
+                                    <!-- Dynamic list of admins -->
+                                </select>
+                                <i data-lucide="user-check" class="absolute left-4 top-3.5 text-slate-400 w-5 h-5"></i>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="admin-password"
+                                class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Şifre</label>
+                            <div class="relative">
+                                <input type="password" id="admin-password" name="password" placeholder="Şifrenizi giriniz"
+                                    required class="input-field pl-11">
+                                <i data-lucide="key" class="absolute left-4 top-3.5 text-slate-400 w-5 h-5"></i>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-1">
+                            <label class="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-400">
+                                <input type="checkbox" id="admin-remember-me" class="w-4 h-4 rounded border-slate-800 bg-slate-950 text-orange-500 focus:ring-0 focus:ring-offset-0">
+                                <span>Beni Hatırla</span>
+                            </label>
+                        </div>
+
+                        <button type="submit" id="btn-admin-login-submit"
+                            class="btn btn-blue w-full py-3.5 font-bold shadow-lg shadow-blue-950/40">
+                            YÖNETİCİ GİRİŞİ YAP
+                        </button>
+                    </form>
+                </div>
+
+                <!-- STEP C: Operator Form -->
+                <div id="login-step-operator" class="hidden space-y-4">
+                    <button
+                        class="btn-back text-slate-400 hover:text-white flex items-center gap-2 text-sm font-medium">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i> Geri Dön
+                    </button>
+                    <h2 class="text-xl font-bold font-outfit text-slate-200 flex items-center gap-2">
+                        <i data-lucide="user" class="w-5 h-5 text-orange-400"></i> Usta Girişi
+                    </h2>
+
+                    <form id="form-operator-login" class="space-y-4">
+                        <div>
+                            <label for="op-username"
+                                class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Usta
+                                Adı</label>
+                            <div class="relative">
+                                <input type="text" id="op-username" name="username" placeholder="Usta adını giriniz"
+                                    required class="input-field pl-11">
+                                <i data-lucide="users" class="absolute left-4 top-3.5 text-slate-400 w-5 h-5"></i>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="op-password"
+                                class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Şifre</label>
+                            <div class="relative">
+                                <input type="password" id="op-password" name="password" placeholder="Şifrenizi giriniz"
+                                    required class="input-field pl-11">
+                                <i data-lucide="key" class="absolute left-4 top-3.5 text-slate-400 w-5 h-5"></i>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-1">
+                            <label class="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-400">
+                                <input type="checkbox" id="op-remember-me" class="w-4 h-4 rounded border-slate-800 bg-slate-950 text-orange-500 focus:ring-0 focus:ring-offset-0">
+                                <span>Beni Hatırla</span>
+                            </label>
+                        </div>
+
+                        <button type="submit" id="btn-operator-login-submit"
+                            class="btn btn-orange w-full py-3.5 font-bold shadow-lg shadow-orange-950/40">
+                            GİRİŞ YAP
+                        </button>
+                    </form>
+                </div>
+
+                <footer class="mt-8 pt-4 border-t border-slate-800 text-center text-xs text-slate-500">
+                    Sistem verileri güvenli SQLite veritabanında saklanmaktadır.
+                </footer>
+            </div>
+        </main>
+
+
+        <!-- ==================== 2. ADMIN PANEL VIEW ==================== -->
+        <div id="view-admin" class="hidden flex-1 flex flex-col lg:flex-row min-w-0 overflow-x-hidden">
+            <!-- Mobile Toggle Header -->
+            <header
+                class="lg:hidden w-full bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between z-30">
+                <div class="flex items-center gap-3">
+                    <button id="btn-toggle-sidebar"
+                        class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors">
+                        <i data-lucide="menu" class="w-6 h-6"></i>
+                    </button>
+                    <span class="text-lg font-bold font-outfit text-white">Soylu Baharat</span>
+                </div>
+                <div
+                    class="text-xs text-slate-400 font-bold bg-slate-950 px-3 py-1.5 rounded-full border border-slate-800">
+                    Yönetici
+                </div>
+            </header>
+
+            <!-- Sidebar -->
+            <aside class="w-72 bg-slate-900 border-r border-slate-800 flex flex-col">
+                <div class="p-6 border-b border-slate-800 flex items-center gap-3">
+                    <div class="p-2 bg-orange-600/10 rounded-lg">
+                        <i data-lucide="settings" class="w-6 h-6 text-orange-500"></i>
+                    </div>
+                    <span
+                        class="text-xl font-bold font-outfit bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">Soylu
+                        Baharat Yönetici Paneli</span>
+                </div>
+
+                <!-- Navigation -->
+                <nav class="flex-1 p-4 space-y-1.5" aria-label="Yönetici Menüsü">
+                    <button id="tab-dashboard" class="nav-item active">
+                        <i data-lucide="bar-chart-3" class="w-5 h-5"></i> Özet Paneli
+                    </button>
+                    <button id="tab-orders" class="nav-item">
+                        <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Sipariş Yönetimi
+                    </button>
+                    <button id="tab-recipes" class="nav-item">
+                        <i data-lucide="file-text" class="w-5 h-5"></i> Reçeteler
+                    </button>
+                    <button id="tab-users" class="nav-item">
+                        <i data-lucide="users" class="w-5 h-5"></i> Personel (Usta)
+                    </button>
+                    <button id="tab-scales" class="nav-item">
+                        <i data-lucide="scale" class="w-5 h-5"></i> Teraziler
+                    </button>
+                    <button id="tab-reports" class="nav-item">
+                        <i data-lucide="activity" class="w-5 h-5"></i> Raporlar
+                    </button>
+                    <button id="tab-traceability" class="nav-item">
+                        <i data-lucide="scan-barcode" class="w-5 h-5"></i> İzlenebilirlik & Etiket
+                    </button>
+                </nav>
+
+                <!-- Data & Backup Operations -->
+                <div class="p-4 border-t border-slate-800 space-y-2">
+                    <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest px-2 mb-2">Veri
+                        Yönetimi</span>
+
+                    <a href="/api/system/export" id="btn-export-backup"
+                        class="btn btn-slate w-full py-2.5 text-xs flex items-center justify-center gap-2">
+                        <i data-lucide="download" class="w-4 h-4"></i> Yedek Al (İndir)
+                    </a>
+
+                    <button id="btn-import-trigger"
+                        class="btn btn-slate w-full py-2.5 text-xs flex items-center justify-center gap-2">
+                        <i data-lucide="upload" class="w-4 h-4"></i> Yedek Yükle
+                    </button>
+                    <input type="file" id="import-file-input" accept=".json" class="hidden">
+                </div>
+
+                <!-- Logged User & Logout -->
+                <div class="p-4 border-t border-slate-800 flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <div
+                            class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-sm font-bold text-slate-200">
+                            Y
+                        </div>
+                        <div class="overflow-hidden">
+                            <div class="text-xs text-slate-500 font-bold">OTURUM</div>
+                            <div id="admin-session-username" class="text-sm font-bold text-slate-300 truncate">Yönetici
+                            </div>
+                        </div>
+                    </div>
+                    <button id="btn-admin-logout"
+                        class="btn btn-red px-3 py-2 text-xs font-bold flex items-center gap-1.5 rounded-xl shadow-lg shadow-red-950/20"
+                        title="Çıkış Yap">
+                        <i data-lucide="log-out" class="w-4 h-4"></i> Çıkış Yap
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Main Dashboard Area -->
+            <main class="flex-1 bg-slate-950 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0">
+
+                <!-- 2.0 DASHBOARD TAB -->
+                <section id="panel-dashboard" class="tab-panel space-y-6">
+                    <!-- Dashboard Greeting -->
+                    <div
+                        class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/40 p-6 border border-slate-800 rounded-2xl">
+                        <div>
+                            <h2 class="text-2xl font-bold font-outfit text-white">Soylu Baharat Üretim ve Analiz Paneli
+                            </h2>
+                            <p class="text-sm text-slate-400 mt-1">Fabrika durumunu, günlük üretim hacmini ve satış
+                                verilerini gerçek zamanlı inceleyin.</p>
+                        </div>
+                        <div
+                            class="flex items-center gap-2 text-slate-400 font-mono text-xs bg-slate-950 px-4 py-2 rounded-xl border border-slate-850">
+                            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Live System Time:
+                            <span id="dash-clock">--:--:--</span>
+                        </div>
+                    </div>
+
+                    <!-- Stats Cards Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <!-- Card 1: Daily Production (kg) -->
+                        <div
+                            class="glass-card p-5 border border-slate-800 rounded-2xl relative overflow-hidden flex flex-col justify-between h-32">
+                            <div class="absolute top-4 right-4 p-2 bg-orange-500/10 rounded-xl text-orange-400">
+                                <i data-lucide="package" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Günlük
+                                    Üretim</span>
+                                <h3 class="text-2xl font-black font-outfit text-white mt-1" id="dash-stat-prod">0.00 kg
+                                </h3>
+                            </div>
+                            <span class="text-[10px] text-green-400 font-bold flex items-center gap-1">
+                                <i data-lucide="trending-up" class="w-3 h-3"></i> Bugün Tartılan Toplam Miktar
+                            </span>
+                        </div>
+
+                        <!-- Card 2: Daily Sales (TL) [Permission protected] -->
+                        <div id="dash-sales-card"
+                            class="glass-card p-5 border border-slate-800 rounded-2xl relative overflow-hidden flex flex-col justify-between h-32">
+                            <div class="absolute top-4 right-4 p-2 bg-emerald-500/10 rounded-xl text-emerald-400">
+                                <i data-lucide="dollar-sign" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Günlük
+                                    Satış Değeri</span>
+                                <h3 class="text-2xl font-black font-outfit text-white mt-1" id="dash-stat-sales">0.00 TL
+                                </h3>
+                            </div>
+                            <span class="text-[10px] text-slate-400 font-semibold flex items-center gap-1"
+                                id="dash-stat-sales-footer">
+                                Üretilen partilerin toplam maliyeti
+                            </span>
+                        </div>
+
+                        <!-- Card 3: Completed Batches -->
+                        <div
+                            class="glass-card p-5 border border-slate-800 rounded-2xl relative overflow-hidden flex flex-col justify-between h-32">
+                            <div class="absolute top-4 right-4 p-2 bg-blue-500/10 rounded-xl text-blue-400">
+                                <i data-lucide="check-square" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Tamamlanan
+                                    Partiler</span>
+                                <h3 class="text-2xl font-black font-outfit text-white mt-1" id="dash-stat-batches">0 / 0
+                                </h3>
+                            </div>
+                            <span class="text-[10px] text-slate-400 font-semibold" id="dash-stat-batches-footer">
+                                Bugün biten üretim emirleri
+                            </span>
+                        </div>
+
+                        <!-- Card 4: Active Scale Connections -->
+                        <div
+                            class="glass-card p-5 border border-slate-800 rounded-2xl relative overflow-hidden flex flex-col justify-between h-32">
+                            <div class="absolute top-4 right-4 p-2 bg-indigo-500/10 rounded-xl text-indigo-400">
+                                <i data-lucide="scale" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Aktif
+                                    Teraziler</span>
+                                <h3 class="text-2xl font-black font-outfit text-white mt-1" id="dash-stat-scales">0 / 0
+                                </h3>
+                            </div>
+                            <span class="text-[10px] text-green-400 font-bold flex items-center gap-1"
+                                id="dash-stat-scales-footer">
+                                TCP/IP Bağlantısı Hazır
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Charts Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Chart 1: Daily Production Trend (7 days) -->
+                        <div
+                            class="glass-card p-6 border border-slate-800 rounded-2xl lg:col-span-2 flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-bold font-outfit text-slate-100">Son 7 Günlük Üretim & Satış
+                                        Eğilimi</h3>
+                                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Haftalık
+                                        Trend</span>
+                                </div>
+                                <div class="relative h-64 w-full">
+                                    <canvas id="chart-production-trend"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Chart 2: Top Selling Mixtures / Distribution -->
+                        <div class="glass-card p-6 border border-slate-800 rounded-2xl flex flex-col justify-between">
+                            <div>
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-bold font-outfit text-slate-100">En Çok Üretilen Baharatlar
+                                    </h3>
+                                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Paylaşım
+                                        Oranı</span>
+                                </div>
+                                <div class="relative h-64 w-full flex items-center justify-center">
+                                    <canvas id="chart-mixture-distribution"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Status Grid: Recent activity & Active scales list -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Recent Activity Logs Table -->
+                        <div class="glass-card p-6 border border-slate-800 rounded-2xl lg:col-span-2 space-y-4">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-lg font-bold font-outfit text-slate-100">Son Tartım Hareketleri</h3>
+                                <button class="btn btn-slate py-1 px-3 text-xs"
+                                    onclick="state.adminTab = 'reports'; renderAdminPanel();">
+                                    Tüm Raporlar
+                                </button>
+                            </div>
+                            <div class="overflow-x-auto min-w-0">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr
+                                            class="border-b border-slate-800 text-xs font-bold text-slate-400 uppercase">
+                                            <th class="p-3">Zaman</th>
+                                            <th class="p-3">Firma</th>
+                                            <th class="p-3">Baharat</th>
+                                            <th class="p-3 font-mono">Hedef</th>
+                                            <th class="p-3 font-mono">Ölçülen</th>
+                                            <th class="p-3 text-center">Durum</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dash-recent-logs-body" class="text-sm">
+                                        <!-- Dynamic activity rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Active scales quick feed monitor -->
+                        <div class="glass-card p-6 border border-slate-800 rounded-2xl space-y-4">
+                            <h3 class="text-lg font-bold font-outfit text-slate-100">Terazi Canlı Durum İstasyonları
+                            </h3>
+                            <div id="dash-scales-monitor-list" class="space-y-3">
+                                <!-- Dynamic scale status -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2.1 ORDERS TAB -->
+                <section id="panel-orders" class="tab-panel space-y-6">
+                    <div id="order-creation-card" class="glass-card p-6 border border-slate-800 rounded-2xl relative">
+                        <h2 class="text-2xl font-bold font-outfit text-white mb-4">Yeni Üretim Emri Oluştur</h2>
+                        <form id="form-create-order" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="order-firm-select"
+                                    class="block text-xs font-bold text-slate-400 uppercase mb-2">Firma Seçin</label>
+                                <select id="order-firm-select" name="firmId" required class="input-field">
+                                    <option value="">Firma Seçiniz...</option>
+                                    <!-- Dynamic options -->
+                                </select>
+                            </div>
+                            <div>
+                                <label for="order-recipe-select"
+                                    class="block text-xs font-bold text-slate-400 uppercase mb-2">Reçete (Ürün)
+                                    Seçin</label>
+                                <select id="order-recipe-select" name="recipeId" required disabled class="input-field">
+                                    <option value="">Önce Firma Seçin...</option>
+                                    <!-- Dynamic options -->
+                                </select>
+                            </div>
+                            <div>
+                                <label for="order-amount"
+                                    class="block text-xs font-bold text-slate-400 uppercase mb-2">Toplam Miktar
+                                    (kg)</label>
+                                <input type="number" step="0.1" min="0.1" id="order-amount" name="amount"
+                                    placeholder="Toplam Sipariş (kg)" required class="input-field">
+                            </div>
+                            <div>
+                                <label for="order-batches"
+                                    class="block text-xs font-bold text-slate-400 uppercase mb-2">Parti (Bölüm)
+                                    Sayısı</label>
+                                <select id="order-batches" name="batches" class="input-field">
+                                    <option value="1">Tek Seferde (1 Parti)</option>
+                                    <option value="2">2 Eşit Parti</option>
+                                    <option value="4">4 Eşit Parti</option>
+                                    <option value="5">5 Eşit Parti</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label for="order-bag-weight"
+                                    class="block text-xs font-bold text-slate-400 uppercase mb-2">Tek Torba / Paket
+                                    Ağırlığı (kg)</label>
+                                <input type="number" step="0.1" min="0.1" id="order-bag-weight" name="bagWeight"
+                                    placeholder="Örn: 20" required class="input-field">
+                            </div>
+                            <button type="submit"
+                                class="btn btn-orange md:col-span-2 py-3 font-bold mt-2 flex items-center justify-center gap-2">
+                                <i data-lucide="play" class="w-5 h-5"></i> Siparişi Oluştur ve İş Emirlerini Böl
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="glass-card p-6 border border-slate-800 rounded-2xl">
+                        <h3 class="text-xl font-bold font-outfit text-slate-200 mb-4">Aktif İş Emirleri</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left table-auto">
+                                <thead class="bg-slate-900/50 text-slate-400 border-b border-slate-800">
+                                    <tr>
+                                        <th class="p-4">Firma</th>
+                                        <th class="p-4">Reçete</th>
+                                        <th class="p-4">Parti No</th>
+                                        <th class="p-4">Hedef Miktar</th>
+                                        <th class="p-4">Operatör</th>
+                                        <th class="p-4">Durum</th>
+                                        <th class="p-4 text-right">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="active-jobs-list" class="divide-y divide-slate-800/50">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2.2 RECIPES TAB -->
+                <section id="panel-recipes" class="tab-panel hidden space-y-6">
+                    <!-- Breadcrumbs navigation -->
+                    <div
+                        class="flex items-center gap-2 text-sm text-slate-500 bg-slate-900/40 p-3 rounded-lg border border-slate-800/60 inline-flex">
+                        <span id="breadcrumb-firms"
+                            class="font-bold text-orange-400 cursor-pointer hover:underline">Firmalar</span>
+                        <span id="crumb-arrow-firm" class="hidden flex items-center"><i data-lucide="chevron-right"
+                                class="w-4 h-4 mx-1"></i></span>
+                        <span id="breadcrumb-firm-name" class="hidden cursor-pointer hover:underline"></span>
+                        <span id="crumb-arrow-recipe" class="hidden flex items-center"><i data-lucide="chevron-right"
+                                class="w-4 h-4 mx-1"></i></span>
+                        <span id="breadcrumb-recipe-name" class="hidden font-bold text-orange-400"></span>
+                    </div>
+
+                    <!-- Recipes Level 1: Firms List -->
+                    <div id="recipe-lvl-firms" class="space-y-6">
+                        <div class="glass-card p-6 border border-slate-800 rounded-2xl">
+                            <h2 class="text-2xl font-bold font-outfit text-white mb-6 flex items-center gap-2">
+                                <i data-lucide="users" class="w-6 h-6 text-orange-400"></i> Kayıtlı Müşteri Firmaları
+                            </h2>
+                            <div id="firms-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <!-- Dynamic cards -->
+                            </div>
+
+                            <div id="add-firm-container" class="border-t border-slate-800 mt-8 pt-6">
+                                <h3 class="text-sm font-bold text-slate-400 mb-3">Yeni Müşteri Firması Tanımla</h3>
+                                <form id="form-add-firm" class="flex gap-3">
+                                    <input type="text" name="firmName" placeholder="Firma Adı Giriniz..." required
+                                        class="input-field flex-1">
+                                    <button type="submit" class="btn btn-blue px-6 flex items-center gap-2 font-bold">
+                                        <i data-lucide="plus" class="w-4 h-4"></i> Firma Ekle
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recipes Level 2: Recipes of selected Firm -->
+                    <div id="recipe-lvl-recipes" class="hidden space-y-6">
+                        <div class="glass-card p-6 border border-slate-800 rounded-2xl">
+                            <div class="flex items-center gap-4 mb-6">
+                                <button
+                                    class="btn-back-to-firms p-2 hover:bg-slate-850 rounded-full text-slate-400 hover:text-white transition-colors">
+                                    <i data-lucide="arrow-left" class="w-6 h-6"></i>
+                                </button>
+                                <h2 id="firm-recipes-title" class="text-2xl font-bold font-outfit text-white"></h2>
+                            </div>
+
+                            <div id="recipes-list-container" class="space-y-3">
+                                <!-- Dynamic rows -->
+                            </div>
+
+                            <div id="add-recipe-container"
+                                class="border-t border-slate-800 mt-8 pt-6 bg-slate-900/30 p-4 rounded-xl">
+                                <h3 class="text-sm font-bold text-slate-400 mb-3">Bu Firmaya Yeni Reçete/Ürün Tanımla
+                                </h3>
+                                <form id="form-add-recipe" class="flex gap-3">
+                                    <input type="text" name="recipeName"
+                                        placeholder="Ürün/Reçete Adı (Örn: Dana Sucuk Çeşnisi)" required
+                                        class="input-field flex-1">
+                                    <button type="submit" class="btn btn-orange px-6 flex items-center gap-2 font-bold">
+                                        <i data-lucide="plus" class="w-4 h-4"></i> Ürünü Oluştur
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recipes Level 3: Ingredients Editor -->
+                    <div id="recipe-lvl-ingredients" class="hidden space-y-6">
+                        <div class="glass-card p-6 border border-slate-800 rounded-2xl">
+                            <div class="flex items-center gap-4 mb-6">
+                                <button
+                                    class="btn-back-to-recipes p-2 hover:bg-slate-850 rounded-full text-slate-400 hover:text-white transition-colors">
+                                    <i data-lucide="arrow-left" class="w-6 h-6"></i>
+                                </button>
+                                <div>
+                                    <h2 id="recipe-ingredients-title"
+                                        class="text-2xl font-bold font-outfit text-orange-400"></h2>
+                                    <p class="text-xs text-slate-400 mt-1 uppercase tracking-wider">1 KG BAZ KARIŞIM
+                                        PARAMETRELERİ</p>
+                                </div>
+                            </div>
+
+                            <div class="overflow-x-auto mb-6">
+                                <table class="w-full text-sm text-left table-auto">
+                                    <thead class="bg-slate-900/50 text-slate-400 border-b border-slate-850">
+                                        <tr>
+                                            <th class="p-3">Sıra</th>
+                                            <th class="p-3">Hammadde / Baharat</th>
+                                            <th class="p-3">Miktar (1 kg için - gr)</th>
+                                            <th class="p-3">Tolerans Sınırı (± gr)</th>
+                                            <th class="p-3 text-center">İşlem</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="recipe-ingredients-list" class="divide-y divide-slate-850/40">
+                                        <!-- Dynamic items -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div id="add-ingredient-container"
+                                class="bg-orange-600/5 border border-orange-500/10 p-5 rounded-xl">
+                                <h3 class="text-sm font-bold text-orange-400 mb-3 flex items-center gap-1">
+                                    <i data-lucide="plus" class="w-4 h-4"></i> Reçeteye Yeni Hammadde Ekle
+                                </h3>
+                                <form id="form-add-ingredient" class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                                    <div class="sm:col-span-2">
+                                        <label for="ing-name"
+                                            class="block text-xs text-slate-400 mb-2 font-medium">Hammadde Adı</label>
+                                        <input type="text" id="ing-name" name="name" placeholder="Tuz, Karabiber vb."
+                                            required class="input-field">
+                                    </div>
+                                    <div>
+                                        <label for="ing-amount"
+                                            class="block text-xs text-slate-400 mb-2 font-medium">Miktar (gr)</label>
+                                        <input type="number" step="0.01" min="0.01" id="ing-amount" name="amount"
+                                            placeholder="60.0" required class="input-field">
+                                    </div>
+                                    <div>
+                                        <label for="ing-tolerance"
+                                            class="block text-xs text-slate-400 mb-2 font-medium">Tolerans (gr)</label>
+                                        <div class="flex gap-2">
+                                            <input type="number" step="0.01" min="0.0" id="ing-tolerance"
+                                                name="tolerance" placeholder="0.5" required class="input-field">
+                                            <button type="submit" class="btn btn-blue px-4" title="Ekle">
+                                                <i data-lucide="plus" class="w-5 h-5"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2.3 USERS TAB -->
+                <section id="panel-users" class="tab-panel hidden space-y-6">
+                    <div class="glass-card p-6 border border-slate-800 rounded-2xl">
+                        <h2 class="text-2xl font-bold font-outfit text-white mb-6 flex items-center gap-2">
+                            <i data-lucide="users" class="w-6 h-6 text-orange-400"></i> Usta / Operatör Yönetimi
+                        </h2>
+
+                        <div id="add-user-container"
+                            class="bg-slate-900/30 p-6 border border-slate-800/80 rounded-xl mb-8">
+                            <h3 class="font-bold text-slate-300 mb-4">Yeni Personel (Usta) Tanımla</h3>
+                            <form id="form-add-user" class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+                                <div>
+                                    <label for="user-name" class="block text-xs font-bold text-slate-400 mb-2">Personel
+                                        Adı Soyadı</label>
+                                    <input type="text" id="user-name" name="name" placeholder="Örn: Veli Usta" required
+                                        class="input-field">
+                                </div>
+                                <div>
+                                    <label for="user-pass" class="block text-xs font-bold text-slate-400 mb-2">Giriş
+                                        Şifresi</label>
+                                    <input type="text" id="user-pass" name="password" placeholder="Şifre" required
+                                        class="input-field">
+                                </div>
+                                <div>
+                                    <label for="user-role" class="block text-xs font-bold text-slate-400 mb-2">Yetki
+                                        Rolü</label>
+                                    <select id="user-role" name="role" required
+                                        class="input-field bg-slate-900 border-slate-800 text-white">
+                                        <option value="operator">Operatör (Sadece Tartım)</option>
+                                        <option value="manager">Yönetici (Tüm Yetkiler)</option>
+                                        <option value="secretary">Sekreterya (Kısıtlı Yetki)</option>
+                                    </select>
+                                </div>
+                                <button type="submit"
+                                    class="btn btn-blue py-3 font-bold flex items-center justify-center gap-2">
+                                    <i data-lucide="user-plus" class="w-5 h-5"></i> Personeli Kaydet
+                                </button>
+                            </form>
+                        </div>
+
+                        <h3 class="font-bold text-slate-300 mb-4">Sistemde Kayıtlı Personel Listesi</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left table-auto">
+                                <thead class="bg-slate-900/50 text-slate-400 border-b border-slate-850">
+                                    <tr>
+                                        <th class="p-4">Ad Soyad</th>
+                                        <th class="p-4">Sistem Rolü</th>
+                                        <th class="p-4">Giriş Şifresi</th>
+                                        <th class="p-4">Modül Yetki İzinleri (Tıklayıp Düzenleyin)</th>
+                                        <th class="p-4 text-center">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-list-body" class="divide-y divide-slate-850/40">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2.4 SCALES TAB -->
+                <section id="panel-scales" class="tab-panel hidden space-y-6">
+                    <div class="glass-card p-6 border border-slate-800 rounded-2xl">
+                        <h2 class="text-2xl font-bold font-outfit text-white mb-6 flex items-center gap-2">
+                            <i data-lucide="scale" class="w-6 h-6 text-orange-400"></i> Cihaz Tanımlama & Terazi
+                            Entegrasyonu
+                        </h2>
+
+                        <div id="add-scale-container"
+                            class="bg-slate-900/30 p-6 border border-slate-800/80 rounded-xl mb-8">
+                            <h3 class="font-bold text-slate-300 mb-4">Yeni Terazi Cihazı Tanımla</h3>
+                            <form id="form-add-scale" class="space-y-4">
+                                <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 items-end">
+                                    <div class="sm:col-span-2">
+                                        <label for="scale-name"
+                                            class="block text-xs font-bold text-slate-400 mb-2">Terazi /
+                                            İstasyon Adı</label>
+                                        <input type="text" id="scale-name" name="name"
+                                            placeholder="Örn: Hassas Baharat Terazisi" required class="input-field">
+                                    </div>
+                                    <div>
+                                        <label for="scale-ip" class="block text-xs font-bold text-slate-400 mb-2">IP
+                                            Adresi</label>
+                                        <input type="text" id="scale-ip" name="ip" placeholder="10.10.100.254" required
+                                            class="input-field">
+                                    </div>
+                                    <div>
+                                        <label for="scale-port"
+                                            class="block text-xs font-bold text-slate-400 mb-2">Bağlantı
+                                            Portu</label>
+                                        <input type="number" id="scale-port" name="port" placeholder="8899" required
+                                            class="input-field">
+                                    </div>
+                                    <input type="hidden" id="scale-simulator" name="is_simulator" value="false">
+                                </div>
+                                <div class="flex justify-end pt-2">
+                                    <button type="submit"
+                                        class="btn btn-blue px-6 py-2.5 flex items-center justify-center gap-2 font-bold shadow-lg shadow-blue-950/20">
+                                        <i data-lucide="plus" class="w-5 h-5"></i> Cihazı Kaydet
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Local TCP Scale Bridge explanation -->
+                        <div class="bg-slate-900/30 p-6 border border-slate-800/80 rounded-xl mb-8 space-y-4">
+                            <h3 class="font-bold text-slate-300 flex items-center gap-2">
+                                <i data-lucide="info" class="w-5 h-5 text-blue-400"></i> Yerel TCP Terazisi & Akıllı
+                                Tartı Entegrasyonu (Smart Weighter)
+                            </h3>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                Web sitemiz güvenlik protokolleri (tarayıcı kısıtlamaları) nedeniyle yerel ağınızdaki
+                                teraziler ile doğrudan ham TCP soketi kuramaz. Ayrıca sunucumuz bulutta olduğundan,
+                                yerel ağınızdaki özel IP adreslerine (örn: <code
+                                    class="text-orange-400 font-mono">10.10.100.254</code>) doğrudan erişemez.
+                            </p>
+
+
+                            <div
+                                class="p-4 rounded-xl bg-orange-950/20 border border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+                                <div class="space-y-1">
+                                    <h4 class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                                        <i data-lucide="smartphone" class="w-4 h-4 text-orange-400"></i> Android Web
+                                        Görüntüleyici(.ZIP)
+                                    </h4>
+                                    <p class="text-[11px] text-slate-400 leading-relaxed">
+                                        Yerel bir bilgisayar çalıştırmadan, direkt telefonunuz üzerinden TCP terazisine
+                                        bağlanmak için Uygulamamızı indiriniz.
+                                    </p>
+                                </div>
+                                <a href="/static/android_webview_app.zip" download
+                                    class="btn btn-orange py-2 px-4 text-xs font-bold flex items-center gap-1.5 rounded-lg whitespace-nowrap shadow-lg shadow-orange-950/20">
+                                    <i data-lucide="download" class="w-4 h-4"></i> Android Projesini İndir
+                                </a>
+                            </div>
+
+                            <div
+                                class="p-4 rounded-xl bg-blue-950/20 border border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+                                <a href="https://expo.dev/artifacts/eas/QtKkd2pTzkAaU91Xc8leWTBtOLqOt5uckg6JTJrP_cc.apk"
+                                    class="btn btn-green py-2 px-4 text-xs font-bold flex items-center gap-1.5 rounded-lg whitespace-nowrap shadow-lg shadow-green-950/20">
+                                    <i data-lucide="download" class="w-4 h-4"></i> APK İndir (Hazır Kurulum)
+                                </a>
+                                <a href="/static/react_native_expo_app.zip" download
+                                    class="btn btn-blue py-2 px-4 text-xs font-bold flex items-center gap-1.5 rounded-lg whitespace-nowrap shadow-lg shadow-blue-950/20">
+                                    <i data-lucide="download" class="w-4 h-4"></i> Expo Projesini İndir (Kaynak Kod)
+                                </a>
+                            </div>
+                        </div>
+
+                        <h3 class="font-bold text-slate-300 mb-4">Aktif / Kayıtlı Teraziler</h3>
+                        <div id="scales-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <!-- Dynamic scale cards -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2.5 REPORTS TAB -->
+                <section id="panel-reports" class="tab-panel hidden space-y-6">
+                    <div class="glass-card p-6 border border-slate-800 rounded-2xl space-y-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <h2 class="text-2xl font-bold font-outfit text-white">Detaylı Üretim Logları & Raporları
+                            </h2>
+                            <div id="reports-record-count"
+                                class="text-xs text-slate-400 font-bold bg-slate-900 px-3 py-1.5 rounded-full border border-slate-800">
+                                0 Kayıt Bulundu
+                            </div>
+                        </div>
+
+                        <!-- Filters Panel -->
+                        <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-850/80 space-y-4">
+                            <div
+                                class="flex items-center gap-2 text-slate-300 font-bold text-xs uppercase tracking-wider">
+                                <i data-lucide="filter" class="w-4 h-4 text-orange-400"></i> Rapor Filtreleme Kriterleri
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                                <div>
+                                    <label for="filter-start-date"
+                                        class="block text-[10px] font-bold text-slate-450 uppercase mb-2">Başlangıç
+                                        Tarihi</label>
+                                    <input type="date" id="filter-start-date" class="input-field text-sm">
+                                </div>
+                                <div>
+                                    <label for="filter-end-date"
+                                        class="block text-[10px] font-bold text-slate-450 uppercase mb-2">Bitiş
+                                        Tarihi</label>
+                                    <input type="date" id="filter-end-date" class="input-field text-sm">
+                                </div>
+                                <div>
+                                    <label for="filter-firm"
+                                        class="block text-[10px] font-bold text-slate-450 uppercase mb-2">Müşteri
+                                        Firma</label>
+                                    <select id="filter-firm" class="input-field text-sm">
+                                        <option value="">Tümü</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="filter-recipe"
+                                        class="block text-[10px] font-bold text-slate-450 uppercase mb-2">Ürün/Reçete</label>
+                                    <select id="filter-recipe" class="input-field text-sm">
+                                        <option value="">Tümü</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="filter-operator"
+                                        class="block text-[10px] font-bold text-slate-450 uppercase mb-2">Operatör
+                                        Usta</label>
+                                    <select id="filter-operator" class="input-field text-sm">
+                                        <option value="">Tümü</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex justify-end mt-2">
+                                <button id="btn-clear-filters"
+                                    class="text-xs text-red-400 font-bold flex items-center gap-1 hover:underline hover:text-red-300">
+                                    <i data-lucide="x" class="w-3.5 h-3.5"></i> Filtreleri Temizle
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Data table -->
+                        <div class="overflow-x-auto border border-slate-850 rounded-xl">
+                            <table class="w-full text-sm text-left table-auto">
+                                <thead class="bg-slate-900 text-slate-350 border-b border-slate-850">
+                                    <tr>
+                                        <th class="p-3">Tarih / Saat</th>
+                                        <th class="p-3">Müşteri Firma</th>
+                                        <th class="p-3">Reçete Adı</th>
+                                        <th class="p-3">Usta</th>
+                                        <th class="p-3">Baharat</th>
+                                        <th class="p-3">Hedef</th>
+                                        <th class="p-3">Tartılan</th>
+                                        <th class="p-3 text-center">Durum</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reports-table-body" class="divide-y divide-slate-850/50">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2.6 TRACEABILITY TAB -->
+                <section id="panel-traceability" class="tab-panel hidden space-y-6">
+                    <div class="glass-card p-6 border border-slate-800 rounded-2xl space-y-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <h2 class="text-2xl font-bold font-outfit text-white">Parti (Batch) İzlenebilirlik &
+                                Etiketleme</h2>
+                            <div id="trace-record-count"
+                                class="text-xs text-slate-400 font-bold bg-slate-900 px-3 py-1.5 rounded-full border border-slate-800">
+                                0 Parti Bulundu
+                            </div>
+                        </div>
+
+                        <!-- Trace Filters -->
+                        <div class="bg-slate-900/50 p-5 rounded-xl border border-slate-850/80 space-y-4">
+                            <div
+                                class="flex items-center gap-2 text-slate-300 font-bold text-xs uppercase tracking-wider">
+                                <i data-lucide="filter" class="w-4 h-4 text-orange-400"></i> Filtreleme Seçenekleri
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div>
+                                    <label for="trace-filter-batch-id"
+                                        class="block text-[10px] font-bold text-slate-450 uppercase mb-2">Parti (Batch)
+                                        Kodu</label>
+                                    <input type="text" id="trace-filter-batch-id" class="input-field text-sm"
+                                        placeholder="Örn: B_DEMO_...">
+                                </div>
+                                <div>
+                                    <label for="trace-filter-firm"
+                                        class="block text-[10px] font-bold text-slate-450 uppercase mb-2">Müşteri
+                                        Firma</label>
+                                    <input type="text" id="trace-filter-firm" class="input-field text-sm"
+                                        placeholder="Firma adı...">
+                                </div>
+                                <div>
+                                    <label for="trace-filter-recipe"
+                                        class="block text-[10px] font-bold text-slate-450 uppercase mb-2">Reçete
+                                        Adı</label>
+                                    <input type="text" id="trace-filter-recipe" class="input-field text-sm"
+                                        placeholder="Reçete adı...">
+                                </div>
+                                <div>
+                                    <label for="trace-filter-operator"
+                                        class="block text-[10px] font-bold text-slate-450 uppercase mb-2">Operatör
+                                        Usta</label>
+                                    <input type="text" id="trace-filter-operator" class="input-field text-sm"
+                                        placeholder="Usta adı...">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Trace Table -->
+                        <div class="overflow-x-auto border border-slate-850 rounded-xl">
+                            <table class="w-full text-sm text-left table-auto">
+                                <thead class="bg-slate-900 text-slate-350 border-b border-slate-850">
+                                    <tr>
+                                        <th class="p-3">Parti Kodu</th>
+                                        <th class="p-3">Müşteri / Reçete</th>
+                                        <th class="p-3">Operatör Usta</th>
+                                        <th class="p-3">Hedef Miktar</th>
+                                        <th class="p-3">Durum</th>
+                                        <th class="p-3 text-center">İşlemler</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="trace-table-body" class="divide-y divide-slate-850/50">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+
+        <!-- ==================== 3. OPERATOR VIEW ==================== -->
+        <div id="view-operator" class="hidden flex-1 flex flex-col">
+
+            <!-- 3.1 STATION SELECT (SCALES SELECT) -->
+            <section id="operator-station-select"
+                class="hidden flex-1 flex flex-col items-center justify-center p-6 relative">
+                <button
+                    class="btn-operator-logout absolute top-8 right-8 btn btn-red px-6 py-2.5 font-bold flex items-center gap-2 shadow-lg shadow-red-950/20">
+                    <i data-lucide="log-out" class="w-5 h-5"></i> Çıkış Yap
+                </button>
+                <div class="text-center max-w-lg space-y-3 mb-10">
+                    <h2 class="text-3xl font-extrabold font-outfit text-orange-400">Terazi İstasyonu Seçimi</h2>
+                    <p class="text-slate-400">Üretim yapacağınız ve terazinin bağlı olduğu istasyonu aşağıdan seçiniz.
+                    </p>
+                </div>
+                <div id="op-scales-grid" class="flex flex-wrap justify-center gap-6 max-w-4xl">
+                    <!-- Dynamic scales buttons -->
+                </div>
+            </section>
+
+            <!-- 3.2 PENDING JOBS QUEUE -->
+            <section id="operator-jobs-queue" class="hidden flex-1 p-8 space-y-6">
+                <header class="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-850">
+                    <div>
+                        <h2 class="text-2xl font-bold font-outfit text-orange-400">Bekleyen Üretim İşleri</h2>
+                        <p class="text-slate-550 text-xs mt-1">İstasyona atanan işlerin listesi</p>
+                    </div>
+                    <div class="flex items-center gap-6">
+                        <div class="text-right">
+                            <span class="block text-[10px] text-slate-500 font-bold uppercase tracking-wider">AKTİF
+                                USTA</span>
+                            <span id="op-logged-username" class="font-bold text-slate-200 text-lg">Ahmet Usta</span>
+                        </div>
+                        <button
+                            class="btn-operator-logout btn btn-red px-4 py-2 text-sm font-bold flex items-center gap-2">
+                            <i data-lucide="log-out" class="w-4 h-4"></i> Çıkış
+                        </button>
+                    </div>
+                </header>
+
+                <div id="pending-jobs-grid" class="space-y-4 max-w-4xl mx-auto">
+                    <!-- Dynamic pending job cards -->
+                </div>
+
+                <div class="flex justify-center pt-8">
+                    <button id="btn-back-to-stations"
+                        class="hidden text-slate-450 hover:text-white flex items-center gap-2 border border-slate-800 px-5 py-3 rounded-xl transition-all hover:bg-slate-900/50">
+                        <i data-lucide="arrow-left" class="w-5 h-5"></i> Terazi İstasyon Seçimine Dön
+                    </button>
+                </div>
+            </section>
+
+            <!-- 3.3 ACTIVE WEIGHING SCREEN -->
+            <section id="operator-weighing-screen" class="hidden flex-1 flex flex-col relative overflow-hidden">
+                <!-- Top Nav / Info Bar -->
+                <header
+                    class="p-3 sm:p-4 bg-slate-900 border-b border-slate-850 flex flex-wrap items-center justify-between gap-3 sm:gap-4 relative z-10">
+                    
+                    <!-- Left: Back Button & Info -->
+                    <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-[200px] lg:flex-initial">
+                        <button id="btn-abort-job" class="btn btn-slate-outline p-2 sm:p-2.5 rounded-xl shrink-0"
+                            title="İşlemi Yarıda Kes / Geri Dön">
+                            <i data-lucide="arrow-left" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+                        </button>
+                        <div class="flex flex-col min-w-0">
+                            <span id="weighing-customer" class="text-orange-400 font-extrabold text-sm sm:text-base truncate">Lezzet Et Dünyası</span>
+                            <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
+                                <span id="weighing-recipe" class="text-slate-200 font-semibold text-xs sm:text-sm truncate">Dana Köfte Harcı</span>
+                                <span id="weighing-batch-badge" class="badge-blue text-[10px] whitespace-nowrap px-2 py-0.5 rounded-lg">P1 (50.00 kg)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Center: Akıllı Tartıya Bağlan Button (Order 3 on mobile, Order 2 on desktop) -->
+                    <div class="w-full lg:w-auto lg:flex-1 flex justify-center order-3 lg:order-2">
+                        <button id="btn-connect-weighter"
+                            class="btn btn-orange w-full sm:w-auto px-4 py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 rounded-xl shadow-lg shadow-orange-950/20">
+                            <i data-lucide="scale" class="w-4 h-4"></i> Akıllı Tartıya Bağlan
+                        </button>
+                    </div>
+
+                    <!-- Right: Operator & Logout (Order 2 on mobile, Order 3 on desktop) -->
+                    <div class="flex items-center gap-2 sm:gap-3 shrink-0 order-2 lg:order-3">
+                        <div class="text-right">
+                            <span class="block text-[8px] text-slate-500 font-bold uppercase">USTA</span>
+                            <span id="weighing-operator-name" class="font-bold text-slate-300 text-xs sm:text-sm truncate max-w-[90px] sm:max-w-none inline-block">Ahmet Usta</span>
+                        </div>
+                        <button
+                            class="btn-operator-logout btn btn-red p-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 rounded-xl shadow-lg shadow-red-950/20"
+                            title="Sistemden Çıkış Yap">
+                            <i data-lucide="log-out" class="w-4 h-4"></i>
+                            <span class="hidden sm:inline">Çıkış Yap</span>
+                        </button>
+                    </div>
+                </header>
+
+                <!-- Weighing Indicator Main Pane -->
+                <main id="weighing-indicator-pane"
+                    class="flex-1 flex flex-col items-center p-4 sm:p-6 bg-slate-950 relative overflow-y-auto">
+                    <!-- Title & Header Info -->
+                    <div class="text-center space-y-2 mb-6 relative z-10 max-w-lg">
+                        <h2 class="text-3xl font-extrabold font-outfit text-orange-400 uppercase tracking-wide">Baharat
+                            Reçete Checklist</h2>
+                        <p class="text-slate-400 text-sm">Lütfen eklediğiniz baharatları yanlarındaki onaylama butonu
+                            ile teyit edin.</p>
+                    </div>
+
+                    <!-- Checklist Container -->
+                    <div id="operator-checklist-container" class="w-full max-w-3xl space-y-4 relative z-10 mb-8">
+                        <!-- Spices checklist items will be dynamically generated by JS -->
+                    </div>
+
+                    <!-- Completion Panel (Hidden by default, displayed at the bottom of the checklist) -->
+                    <div id="checklist-completion-panel"
+                        class="hidden w-full max-w-3xl glass-card p-6 border border-green-500/30 rounded-2xl text-center space-y-4 shadow-xl mb-8">
+                        <div
+                            class="inline-flex p-3 bg-green-950/80 rounded-2xl text-green-500 border border-green-500/20">
+                            <i data-lucide="package-check" class="w-8 h-8"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-green-400">TÜM TARTIMLAR TAMAMLANDI!</h3>
+                        <p class="text-slate-300 text-sm max-w-md mx-auto">
+                            Tüm hammaddeler başarıyla onaylandı. Karışımı paketlemek için aşağıdaki butonu
+                            kullanabilirsiniz.
+                        </p>
+                        <button id="btn-show-packaging"
+                            class="btn btn-green px-8 py-3.5 font-bold uppercase shadow-lg shadow-green-950/30">
+                            Paketleme Detaylarını Göster
+                        </button>
+                    </div>
+
+                    <!-- Mixing & Packaging Modal Overlay (Hidden by default) -->
+                    <div id="packaging-overlay"
+                        class="hidden absolute inset-0 bg-slate-950/98 flex items-center justify-center z-50 p-4">
+                        <div
+                            class="card bg-slate-900 border border-green-500/30 p-8 rounded-2xl max-w-md w-full text-center shadow-2xl relative overflow-hidden">
+                            <div class="absolute -top-10 -right-10 w-32 h-32 bg-green-500/10 rounded-full blur-2xl">
+                            </div>
+
+                            <div
+                                class="inline-flex p-3 bg-green-950/80 rounded-2xl text-green-500 mb-4 border border-green-500/20">
+                                <i data-lucide="package" class="w-10 h-10 animate-bounce"></i>
+                            </div>
+
+                            <h3 class="text-2xl font-extrabold font-outfit text-green-400 mb-2 uppercase tracking-wide">
+                                KARIŞTIRMA VE PAKETLEME</h3>
+                            <p class="text-slate-350 text-sm mb-6">
+                                Tartım aşamaları başarıyla tamamlandı. Karışımı miksere aktararak karıştırma işlemine
+                                başlayabilirsiniz.
+                            </p>
+
+                            <!-- Bag count and info box -->
+                            <div
+                                class="bg-slate-950/90 border border-slate-800 p-4 rounded-xl mb-6 text-left space-y-3 font-mono">
+                                <div class="flex justify-between items-center text-sm border-b border-slate-850 pb-2">
+                                    <span class="text-slate-400 font-bold uppercase">Gereken Torba</span>
+                                    <span id="pack-total-bags" class="text-orange-400 font-extrabold text-lg">0
+                                        Adet</span>
+                                </div>
+                                <div class="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Paketleme
+                                    Detayı:</div>
+                                <ul id="pack-bags-list" class="space-y-1 text-slate-300 text-sm list-inside list-disc">
+                                    <!-- Dynamic list -->
+                                </ul>
+                            </div>
+
+                            <button id="btn-packaging-finish"
+                                class="btn btn-green w-full py-4 font-bold text-lg shadow-lg shadow-green-950/40 uppercase">
+                                Paketlemeyi Tamamla ve Bitir
+                            </button>
+                        </div>
+                    </div>
+                </main>
+
+                <!-- Terazi Simulator Controller (Bottom Panel) -->
+                <footer id="simulator-footer"
+                    class="hidden p-4 sm:p-6 bg-slate-900 border-t border-slate-850 flex flex-col md:flex-row gap-4 sm:gap-6 items-center">
+                    <div id="sim-slider-container"
+                        class="flex-1 w-full bg-slate-950 p-4 rounded-xl border border-slate-800">
+                        <div
+                            class="text-xs text-amber-500 font-extrabold mb-3 flex items-center gap-1.5 uppercase tracking-wider">
+                            <i data-lucide="settings" class="w-4 h-4"></i> Terazi Simülasyon Kumandası
+                        </div>
+                        <input type="range" id="simulator-slider" min="0" max="30" step="0.01" value="0"
+                            class="w-full h-2.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500">
+                        <div class="flex justify-between text-xs text-slate-500 mt-2 font-mono">
+                            <span id="sim-tare">Dara: 0.00 gr</span>
+                            <span id="sim-gross">Brüt: 0.00 gr</span>
+                        </div>
+                    </div>
+
+                    <div id="sim-live-container"
+                        class="hidden flex-1 w-full bg-slate-950 p-5 rounded-xl border border-slate-800">
+                        <div
+                            class="text-xs text-green-500 font-extrabold mb-3 flex items-center gap-1.5 uppercase tracking-wider">
+                            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse inline-block mr-1"></span>
+                            Canlı Simülatör Akışı
+                        </div>
+                        <div class="flex flex-col gap-2 font-mono text-sm text-slate-300">
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Simülatör URL:</span>
+                                <span id="sim-live-url" class="text-slate-400"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-500">Dalgalanma (Jitter):</span>
+                                <span id="sim-live-jitter" class="text-slate-400">-</span>
+                            </div>
+                            <div class="flex justify-between items-center mt-2 border-t border-slate-850 pt-2">
+                                <span class="text-slate-500">Canlı Ağırlık:</span>
+                                <span id="sim-live-weight" class="text-green-400 font-black text-xl">0.00 gr</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="btn-weighing-confirm"
+                        class="w-full md:w-auto h-24 px-14 btn btn-blue rounded-2xl text-2xl font-black shadow-xl shadow-blue-950/40 flex flex-col items-center justify-center min-w-[260px] hover:scale-[1.02] active:scale-[0.98] transition-all">
+                        <i data-lucide="check-circle" class="w-8 h-8 mb-1"></i>
+                        <span id="btn-weighing-confirm-text">ONAYLA</span>
+                    </button>
+                </footer>
+            </section>
+        </div>
+
+    </div>
+
+    <!-- Traceability Detail Modal Overlay -->
+    <div id="trace-modal-overlay"
+        class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div
+            class="card bg-slate-900 border border-slate-800 p-8 rounded-2xl max-w-4xl w-full shadow-2xl relative overflow-y-auto max-h-[90vh]">
+            <button id="btn-close-trace-modal"
+                class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+
+            <div
+                class="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-6 mb-6 gap-6">
+                <div>
+                    <span
+                        class="inline-block text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-slate-950 text-slate-400 border border-slate-800 mb-2">Parti
+                        Raporu</span>
+                    <h3 id="trace-modal-title" class="text-2xl font-extrabold font-outfit text-white">Parti: B_DEMO_3
+                    </h3>
+                    <p class="text-slate-400 text-sm mt-1">İzlenebilirlik ve doğrulama kayıtları</p>
+                </div>
+                <!-- Barcode Container -->
+                <div class="flex flex-col items-center bg-white p-3 rounded-xl border border-slate-800 text-black">
+                    <div id="trace-modal-barcode" class="font-barcode text-4xl tracking-widest text-center"
+                        style="font-family: 'Libre Barcode 128', sans-serif;">*B_DEMO_3*</div>
+                    <span id="trace-modal-barcode-text"
+                        class="text-xs font-mono font-bold mt-1 text-slate-600">B_DEMO_3</span>
+                </div>
+            </div>
+
+            <!-- Metadata Grid -->
+            <div
+                class="grid grid-cols-2 md:grid-cols-4 gap-6 bg-slate-950/50 p-5 rounded-xl border border-slate-850/80 mb-6">
+                <div>
+                    <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Müşteri
+                        Firma</span>
+                    <span id="trace-modal-customer" class="text-sm font-bold text-white mt-1 block">-</span>
+                </div>
+                <div>
+                    <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ürün /
+                        Reçete</span>
+                    <span id="trace-modal-recipe" class="text-sm font-bold text-white mt-1 block">-</span>
+                </div>
+                <div>
+                    <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Operatör
+                        Usta</span>
+                    <span id="trace-modal-operator" class="text-sm font-bold text-white mt-1 block">-</span>
+                </div>
+                <div>
+                    <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Toplam Hedef
+                        Ağırlık</span>
+                    <span id="trace-modal-target" class="text-sm font-bold text-white mt-1 block">-</span>
+                </div>
+            </div>
+
+            <!-- Weighed Ingredients Table -->
+            <div class="mb-8">
+                <h4 class="text-sm font-bold text-slate-350 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <i data-lucide="list" class="w-4 h-4 text-orange-400"></i> Tartılan Hammaddeler
+                </h4>
+                <div class="overflow-x-auto border border-slate-850 rounded-xl">
+                    <table class="w-full text-sm text-left table-auto">
+                        <thead class="bg-slate-950 text-slate-400 border-b border-slate-850">
+                            <tr>
+                                <th class="p-3">Hammadde</th>
+                                <th class="p-3">Hedef (gr)</th>
+                                <th class="p-3">Tartılan (gr)</th>
+                                <th class="p-3">Hata / Sapma</th>
+                                <th class="p-3">Tarih</th>
+                                <th class="p-3 text-center">Durum</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trace-modal-table-body" class="divide-y divide-slate-850/50">
+                            <!-- Dynamic rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex flex-col sm:flex-row justify-end gap-3 border-t border-slate-800 pt-6">
+                <button id="btn-trace-modal-pdf" class="btn btn-slate py-3 px-6 flex items-center justify-center gap-2">
+                    <i data-lucide="file-text" class="w-4 h-4"></i> PDF Rapor Yazdır
+                </button>
+                <button id="btn-trace-modal-label"
+                    class="btn btn-orange py-3 px-6 flex items-center justify-center gap-2">
+                    <i data-lucide="printer" class="w-4 h-4"></i> Etiket Bas (Zebra/PDF)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scale Connection Modal Overlay -->
+    <div id="scale-modal-overlay"
+        class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="card bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-md w-full shadow-2xl relative">
+            <button id="btn-close-scale-modal"
+                class="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+            <h3 class="text-xl font-extrabold font-outfit text-white mb-2 flex items-center gap-2">
+                <i data-lucide="scale" class="w-6 h-6 text-orange-400"></i> Akıllı Terazi Bağlantısı
+            </h3>
+            <p class="text-slate-400 text-sm mb-6">Lütfen bağlanmak istediğiniz terazi istasyonunu seçin.</p>
+
+            <div id="modal-scales-list" class="space-y-3 max-h-60 overflow-y-auto mb-6 pr-1">
+                <!-- Scales will be injected dynamically -->
+            </div>
+
+            <div id="modal-connection-status"
+                class="hidden p-3 rounded-xl bg-slate-950 border border-slate-850 text-xs font-mono text-center">
+                <!-- Status text -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Frontend JS App -->
+    <script src="/static/js/app.js?v={{ range(1, 100000) | random }}"></script>
+</body>
+
+</html>
