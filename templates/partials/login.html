@@ -1,0 +1,131 @@
+<!-- ==================== 1. LOGIN VIEW ==================== -->
+        <main id="view-login" class="flex-1 flex items-center justify-center p-4">
+            <div
+                class="card w-full max-w-md p-8 glass-card login-card border border-slate-800 shadow-2xl relative overflow-hidden">
+                <!-- Decorative background elements -->
+                <div class="absolute -top-10 -right-10 w-40 h-40 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"
+                    style="pointer-events: none;"></div>
+                <div class="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"
+                    style="pointer-events: none;"></div>
+
+                <header class="text-center mb-8">
+                    <div
+                        class="inline-flex p-3 bg-gradient-to-tr from-orange-600 to-amber-500 rounded-2xl shadow-lg shadow-orange-900/30 mb-4 animate-pulse">
+                        <i data-lucide="scale" class="w-8 h-8 text-white"></i>
+                    </div>
+                    <h1
+                        class="text-3xl font-extrabold font-outfit bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">
+                        Baharat Reçete Sistemi
+                    </h1>
+                    <p class="text-slate-400 text-sm mt-2">Güvenli üretim ve hassas tartım kontrol paneli</p>
+                </header>
+
+                <!-- STEP A: Role Selection -->
+                <div id="login-step-role" class="space-y-4">
+                    <button id="btn-select-admin"
+                        class="login-btn-select login-btn-select-admin w-full font-semibold text-lg transition-all">
+                        <i data-lucide="settings" class="w-5 h-5"></i> Yönetici Girişi
+                    </button>
+                    <button id="btn-select-operator"
+                        class="login-btn-select login-btn-select-operator w-full font-semibold text-lg transition-all">
+                        <i data-lucide="users" class="w-5 h-5"></i> Usta / Operatör Girişi
+                    </button>
+                </div>
+
+                <!-- STEP B: Admin Password -->
+                <div id="login-step-admin" class="hidden space-y-4">
+                    <button
+                        class="btn-back text-slate-400 hover:text-white flex items-center gap-2 text-sm font-medium">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i> Geri Dön
+                    </button>
+                    <h2 class="text-xl font-bold font-outfit text-slate-200">Yönetici Girişi</h2>
+                    
+                    <form id="form-admin-login" class="space-y-4">
+                        <div>
+                            <label for="admin-select-username"
+                                class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Yönetici Adı</label>
+                            <div class="relative">
+                                <input type="text" id="admin-select-username" name="username" placeholder="Yönetici adını giriniz" required
+                                    class="input-field pl-11 bg-slate-900 border-slate-800 text-white">
+                                <i data-lucide="user-check" class="absolute left-4 top-3.5 text-slate-400 w-5 h-5"></i>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="admin-password"
+                                class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Şifre</label>
+                            <div class="relative">
+                                <input type="password" id="admin-password" name="password" placeholder="Şifrenizi giriniz"
+                                    required class="input-field pl-11">
+                                <i data-lucide="key" class="absolute left-4 top-3.5 text-slate-400 w-5 h-5"></i>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-1">
+                            <label class="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-400">
+                                <input type="checkbox" id="admin-remember-me" class="w-4 h-4 rounded border-slate-800 bg-slate-950 text-orange-500 focus:ring-0 focus:ring-offset-0">
+                                <span>Beni Hatırla</span>
+                            </label>
+                        </div>
+
+                        <button type="submit" id="btn-admin-login-submit"
+                            class="btn btn-blue w-full py-3.5 font-bold shadow-lg shadow-blue-950/40">
+                            YÖNETİCİ GİRİŞİ YAP
+                        </button>
+                    </form>
+                </div>
+
+                <!-- STEP C: Operator Form -->
+                <div id="login-step-operator" class="hidden space-y-4">
+                    <button
+                        class="btn-back text-slate-400 hover:text-white flex items-center gap-2 text-sm font-medium">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i> Geri Dön
+                    </button>
+                    <h2 class="text-xl font-bold font-outfit text-slate-200 flex items-center gap-2">
+                        <i data-lucide="user" class="w-5 h-5 text-orange-400"></i> Usta Girişi
+                    </h2>
+
+                    <form id="form-operator-login" class="space-y-4">
+                        <div>
+                            <label for="op-username"
+                                class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Usta
+                                Adı</label>
+                            <div class="relative">
+                                <input type="text" id="op-username" name="username" placeholder="Usta adını giriniz"
+                                    required class="input-field pl-11">
+                                <i data-lucide="users" class="absolute left-4 top-3.5 text-slate-400 w-5 h-5"></i>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="op-password"
+                                class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Şifre</label>
+                            <div class="relative">
+                                <input type="password" id="op-password" name="password" placeholder="Şifrenizi giriniz"
+                                    required class="input-field pl-11">
+                                <i data-lucide="key" class="absolute left-4 top-3.5 text-slate-400 w-5 h-5"></i>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-1">
+                            <label class="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-400">
+                                <input type="checkbox" id="op-remember-me" class="w-4 h-4 rounded border-slate-800 bg-slate-950 text-orange-500 focus:ring-0 focus:ring-offset-0">
+                                <span>Beni Hatırla</span>
+                            </label>
+                        </div>
+
+                        <button type="submit" id="btn-operator-login-submit"
+                            class="btn btn-orange w-full py-3.5 font-bold shadow-lg shadow-orange-950/40">
+                            GİRİŞ YAP
+                        </button>
+                    </form>
+                </div>
+
+                <footer class="mt-8 pt-4 border-t border-slate-800 text-center text-xs text-slate-500">
+                    Sistem verileri güvenli SQLite veritabanında saklanmaktadır.
+                </footer>
+            </div>
+        </main>
+
+
+        

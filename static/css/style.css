@@ -63,6 +63,13 @@ h1, h2, h3, h4, h5, h6, .font-outfit {
     font-family: var(--font-outfit);
 }
 
+button {
+    font-family: inherit;
+    background: transparent;
+    color: inherit;
+    border: none;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
