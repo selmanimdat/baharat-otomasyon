@@ -91,6 +91,7 @@ function bindEvents() {
     document.getElementById('tab-traceability')?.addEventListener('click', () => { state.adminTab = 'traceability'; renderAdminPanel(); });
     document.getElementById('tab-accounting')?.addEventListener('click', () => { state.adminTab = 'accounting'; renderAdminPanel(); });
     document.getElementById('tab-settings')?.addEventListener('click', () => { state.adminTab = 'settings'; renderAdminPanel(); });
+    document.getElementById('tab-audit-logs')?.addEventListener('click', () => { state.adminTab = 'audit-logs'; renderAdminPanel(); });
 
     // Customer Modal Handlers
     document.getElementById('btn-add-customer')?.addEventListener('click', () => openCustomerModal());
@@ -189,6 +190,28 @@ function bindEvents() {
         renderOrdersTab();
     });
 
+    dom.orderRecipeSelect?.addEventListener('change', () => {
+        if (typeof updateOrderFormSummary === 'function') updateOrderFormSummary();
+    });
+    document.getElementById('order-amount')?.addEventListener('input', () => {
+        if (typeof updateOrderFormSummary === 'function') updateOrderFormSummary();
+    });
+    document.getElementById('order-bag-weight')?.addEventListener('input', () => {
+        if (typeof updateOrderFormSummary === 'function') updateOrderFormSummary();
+    });
+    document.getElementById('order-batches')?.addEventListener('change', () => {
+        if (typeof updateOrderFormSummary === 'function') updateOrderFormSummary();
+    });
+
+
+    document.getElementById('btn-add-order-segment')?.addEventListener('click', () => {
+        if (!window.orderSegments) window.orderSegments = [];
+        window.orderSegments.push({ id: Date.now(), amount: 0, bagWeight: 0 });
+        if (typeof window.renderOrderSegments === 'function') window.renderOrderSegments();
+        if (typeof updateOrderFormSummary === 'function') updateOrderFormSummary();
+    });
+
+
     dom.formCreateOrder?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const fd = new FormData(dom.formCreateOrder);
@@ -197,13 +220,28 @@ function bindEvents() {
             recipeId: fd.get('recipeId'),
             totalAmount: fd.get('amount'),
             batches: fd.get('batches'),
-            bagWeight: fd.get('bagWeight')
+            bagWeight: fd.get('bagWeight'),
+            deliveryDate: fd.get('deliveryDate') || getTodayDateStr(),
+            urgency: fd.get('urgency') || 'normal',
+            notes: fd.get('notes') || ''
         };
         
+        if (window.orderSegments && window.orderSegments.length > 0) {
+            data.segments = window.orderSegments;
+        }
+
+        if (window.orderExtras && window.orderExtras.length > 0) {
+            data.extras = window.orderExtras;
+        }
+
         try {
             await apiPost('/api/orders', data);
             alert('Sipariş başarıyla oluşturuldu ve partilere bölündü.');
             dom.formCreateOrder.reset();
+            window.orderSegments = [];
+            window.orderExtras = [];
+            if (typeof window.renderOrderSegments === 'function') window.renderOrderSegments();
+            if (typeof window.renderOrderExtras === 'function') window.renderOrderExtras();
             state.orderSelectedFirmId = null;
             await fetchDb();
             renderOrdersTab();
@@ -463,27 +501,18 @@ function bindEvents() {
             renderOperatorPanel();
         }
     });
-
     dom.btnShowPackaging?.addEventListener('click', async () => {
         try {
             await apiPut(`/api/batches/${state.activeJob.batch.id}/status`, { status: 'paketlemede' });
             await fetchDb();
         } catch (e) {}
+        if (dom.checklistCompletionPanel) dom.checklistCompletionPanel.classList.add('hidden');
         showPackagingScreen();
     });
 
     dom.btnPackagingFinish?.addEventListener('click', async () => {
-        dom.packagingOverlay.classList.add('hidden');
+        if (dom.packagingPanel) dom.packagingPanel.classList.add('hidden');
         await finishJob();
-    });
-
-    dom.btnPackagingBack?.addEventListener('click', async () => {
-        try {
-            await apiPut(`/api/batches/${state.activeJob.batch.id}/status`, { status: 'tartımda' });
-            await fetchDb();
-        } catch (e) {}
-        dom.packagingOverlay.classList.add('hidden');
-        renderWeighingScreen();
     });
 
     // Smart scale listeners

@@ -48,6 +48,9 @@ def create_app():
         notify_websocket({"type": "db_updated"})
 
     with app.app_context():
+        # NOT: Buradaki eski "DROP TABLE IF EXISTS scale" satiri kaldirildi; her
+        # uygulama basladiginda kaydedilmis tum terazi ayarlarini siliyordu.
+        # Sema degisiklikleri artik ./make_migrate ile uygulanir.
         db.create_all()
         try:
             db.session.execute(db.text("ALTER TABLE user ADD COLUMN can_view_sales BOOLEAN DEFAULT 1"))
@@ -61,17 +64,6 @@ def create_app():
         except Exception:
             db.session.rollback()
 
-        try:
-            db.session.execute(db.text("ALTER TABLE scale ADD COLUMN connection_type VARCHAR(50) DEFAULT 'wired'"))
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-
-        try:
-            db.session.execute(db.text("ALTER TABLE scale ADD COLUMN data_format VARCHAR(50) DEFAULT 'densi'"))
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
 
         try:
             db.session.execute(db.text("ALTER TABLE user ADD COLUMN api_token VARCHAR(100)"))
@@ -85,13 +77,30 @@ def create_app():
             "ALTER TABLE firm ADD COLUMN address TEXT",
             "ALTER TABLE firm ADD COLUMN tax_id VARCHAR(50)",
             "ALTER TABLE firm ADD COLUMN contact_person VARCHAR(100)",
-            "ALTER TABLE firm ADD COLUMN notes TEXT"
+            "ALTER TABLE firm ADD COLUMN notes TEXT",
+            "ALTER TABLE batch ADD COLUMN bag_weight FLOAT",
+            "ALTER TABLE `order` ADD COLUMN packaging_segments TEXT",
+            "ALTER TABLE recipe ADD COLUMN is_active BOOLEAN DEFAULT 1"
         ]:
             try:
                 db.session.execute(db.text(col_stmt))
                 db.session.commit()
             except Exception:
                 db.session.rollback()
+
+        try:
+            db.session.execute(db.text("UPDATE recipe SET is_active = 1 WHERE is_active IS NULL"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        try:
+            db.session.execute(db.text(
+                "UPDATE batch SET bag_weight = (SELECT bag_weight FROM `order` WHERE `order`.id = batch.order_id) WHERE bag_weight IS NULL"
+            ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
             
         from backend.seed import seed_database
         seed_database()

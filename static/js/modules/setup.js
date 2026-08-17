@@ -8,6 +8,13 @@ if (typeof lucide === 'undefined') {
     };
 }
 
+// --- UTILS ---
+window.getTodayDateStr = function() {
+    const d = new Date();
+    return `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+};
+
+
 // --- NATIVE SCALE CONNECTION TEST BRIDGE ---
 window.testNativeConnection = function(ip, port) {
     return new Promise((resolve) => {
@@ -127,6 +134,7 @@ var dom = {
     tabTraceability: document.getElementById('tab-traceability'),
     tabAccounting: document.getElementById('tab-accounting'),
     tabSettings: document.getElementById('tab-settings'),
+    tabAuditLogs: document.getElementById('tab-audit-logs'),
     adminSessionUsername: document.getElementById('admin-session-username'),
     btnAdminLogout: document.getElementById('btn-admin-logout'),
     
@@ -141,6 +149,7 @@ var dom = {
     panelTraceability: document.getElementById('panel-traceability'),
     panelAccounting: document.getElementById('panel-accounting'),
     panelSettings: document.getElementById('panel-settings'),
+    panelAuditLogs: document.getElementById('panel-audit-logs'),
     
     // Admin Forms
     formCreateOrder: document.getElementById('form-create-order'),
@@ -213,11 +222,9 @@ var dom = {
     warningDesc: document.getElementById('warning-desc'),
     btnWarningForce: document.getElementById('btn-warning-force'),
     btnWarningCancel: document.getElementById('btn-warning-cancel'),
-    packagingOverlay: document.getElementById('packaging-overlay'),
     packTotalBags: document.getElementById('pack-total-bags'),
     packBagsList: document.getElementById('pack-bags-list'),
     btnPackagingFinish: document.getElementById('btn-packaging-finish'),
-    btnPackagingBack: document.getElementById('btn-packaging-back'),
     simulatorFooter: document.getElementById('simulator-footer'),
     simSliderContainer: document.getElementById('sim-slider-container'),
     simulatorSlider: document.getElementById('simulator-slider'),
@@ -229,10 +236,10 @@ var dom = {
     simLiveUrl: document.getElementById('sim-live-url'),
     simLiveJitter: document.getElementById('sim-live-jitter'),
     simLiveWeight: document.getElementById('sim-live-weight'),
-    
     operatorChecklistContainer: document.getElementById('operator-checklist-container'),
     checklistCompletionPanel: document.getElementById('checklist-completion-panel'),
     btnShowPackaging: document.getElementById('btn-show-packaging'),
+    packagingPanel: document.getElementById('packaging-panel'),
 
     // Smart scale connection UI
     btnConnectWeighter: document.getElementById('btn-connect-weighter'),
@@ -254,3 +261,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     startGlobalBackgroundPolling();
 });
 
+// --- DB UPDATE TOAST ---
+// Reçete düzenleme ekranındayken db_updated WebSocket mesajı gelince
+// sayfayı sıfırlamak yerine küçük bir bildirim gösterir
+function showDbUpdateToast() {
+    const toastId = 'db-update-toast';
+    // Var olan tostu kaldır
+    document.getElementById(toastId)?.remove();
+
+    const toast = document.createElement('div');
+    toast.id = toastId;
+    toast.className = 'fixed bottom-6 right-6 z-[9999] flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/40 bg-amber-950/90 text-amber-200 shadow-xl backdrop-blur-sm text-sm font-semibold transition-all';
+    toast.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>Siparişte değişiklik yapıldı</span>
+    `;
+    document.body.appendChild(toast);
+    // 4 saniye sonra kaldır
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}

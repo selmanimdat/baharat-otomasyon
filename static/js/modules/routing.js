@@ -114,6 +114,7 @@ function updateNavigationPermissions() {
     toggleEl(dom.tabTraceability, showReports || showOrders);
     toggleEl(dom.tabAccounting || document.getElementById('tab-accounting'), showReports || showOrders || isAdmin);
     toggleEl(dom.tabSettings, showSettings);
+    toggleEl(dom.tabAuditLogs || document.getElementById('tab-audit-logs'), showSettings);
 
     // Hide/show Backup options based on admin role
     const backupContainer = document.getElementById('btn-export-backup')?.parentElement;
@@ -129,7 +130,10 @@ function updateNavigationPermissions() {
     if (showReports) allowedTabs.push('reports');
     if (showReports || showOrders) allowedTabs.push('traceability');
     if (showReports || showOrders || isAdmin) allowedTabs.push('accounting');
-    if (showSettings) allowedTabs.push('settings');
+    if (showSettings) {
+        allowedTabs.push('settings');
+        allowedTabs.push('audit-logs');
+    }
 
     if (allowedTabs.length > 0 && !allowedTabs.includes(state.adminTab)) {
         state.adminTab = allowedTabs[0];

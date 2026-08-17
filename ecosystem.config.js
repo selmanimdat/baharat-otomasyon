@@ -9,6 +9,15 @@ module.exports = {
       env: {
         PYTHONPATH: "/opt/baharat otomasyon"
       }
+    },
+    {
+      name: "baharat-websocket",
+      script: "websocket_server.py",
+      cwd: "/opt/baharat otomasyon",
+      interpreter: "/opt/baharat_venv/bin/python",
+      env: {
+        PYTHONPATH: "/opt/baharat otomasyon"
+      }
     }
   ]
 };

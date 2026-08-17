@@ -22,7 +22,7 @@ def start_batch(batch_id):
 @operator_bp.route('/batches/<string:batch_id>/finish', methods=['POST'])
 def finish_batch(batch_id):
     batch = Batch.query.get_or_404(batch_id)
-    batch.status = 'fiş kesilmedi'
+    batch.status = 'tamamlandı'
     db.session.commit()
     return jsonify({'success': True, 'batch': batch.to_dict()})
 

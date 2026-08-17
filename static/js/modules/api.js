@@ -78,7 +78,14 @@ function initWebSocket() {
             if (data.type === 'db_updated') {
                 console.log("Real-time DB update notification received.");
                 await fetchDb();
-                updateUI();
+
+                // Eğer kullanıcı reçete düzenleme/ekleme ekranındaysa (activeRecipeId set),
+                // tam updateUI yerine sadece toast göster (sayfayı sıfırlama)
+                if (state.view === 'admin' && state.adminTab === 'recipes' && state.activeRecipeId) {
+                    showDbUpdateToast();
+                } else {
+                    updateUI();
+                }
             } else if (data.type === 'weight_update') {
                 if (state.connectedScale && state.connectedScale.id == data.scale_id) {
                     const weight = parseFloat(data.weight) || 0.0;

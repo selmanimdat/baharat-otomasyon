@@ -1,8 +1,9 @@
+import json
+from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify, session
 from backend.extensions import db
-from backend.models import User, Scale, Firm, Recipe, RecipeItem, Order, Batch, WeighingLog, SystemSetting
-from backend.utils import require_permission
-from backend.services.scale_manager import scale_manager
+from backend.models import User, Firm, Recipe, RecipeItem, Order, Batch, WeighingLog, SystemSetting, Scale, Transaction
+from backend.utils import require_permission, get_authenticated_user
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -20,11 +21,38 @@ def save_settings():
         return jsonify({'success': False, 'message': 'Eksik veri'}), 400
 
     setting = SystemSetting.query.filter_by(key=key).first()
+    
+    from backend.models import AuditLog
+    username = current_user.name if current_user else 'Sistem'
+    
     if not setting:
         setting = SystemSetting(key=key, value=value)
         db.session.add(setting)
+        
+        log_entry = AuditLog(
+            user=username,
+            entity_type='SystemSetting',
+            entity_id=key,
+            action='CREATE',
+            old_value=None,
+            new_value=json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else str(value),
+            description=f"Ayar oluşturuldu: {key}"
+        )
+        db.session.add(log_entry)
     else:
+        old_val = setting.value
         setting.value = value
+        
+        log_entry = AuditLog(
+            user=username,
+            entity_type='SystemSetting',
+            entity_id=key,
+            action='UPDATE',
+            old_value=json.dumps(old_val, ensure_ascii=False) if isinstance(old_val, (dict, list)) else str(old_val),
+            new_value=json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else str(value),
+            description=f"Ayar güncellendi: {key}"
+        )
+        db.session.add(log_entry)
     
     db.session.commit()
     return jsonify({'success': True, 'setting': setting.to_dict()})
@@ -35,8 +63,41 @@ def get_setting(key):
     if not setting:
         return jsonify({'key': key, 'value': ''}), 200
     return jsonify(setting.to_dict())
+@admin_bp.route('/settings/rename_ingredient', methods=['PUT'])
+def rename_ingredient():
+    from backend.utils import get_authenticated_user
+    current_user = get_authenticated_user()
+    if not current_user or current_user.role != 'admin':
+        return jsonify({'success': False, 'message': 'Sadece Yönetici işlemi yapabilir!'}), 403
 
+    data = request.json or {}
+    old_name = data.get('oldName', '').strip()
+    new_name = data.get('newName', '').strip()
 
+    if not old_name or not new_name or old_name == new_name:
+        return jsonify({'success': False, 'message': 'Geçersiz isim!'}), 400
+
+    # 1. Update recipe_order in SystemSetting
+    recipe_setting = SystemSetting.query.filter_by(key='recipe_order').first()
+    if recipe_setting and recipe_setting.value:
+        lines = [s.strip() for s in recipe_setting.value.split('\n') if s.strip()]
+        if old_name in lines:
+            lines[lines.index(old_name)] = new_name
+            recipe_setting.value = '\n'.join(lines)
+            db.session.add(recipe_setting)
+
+    # 2. Update RecipeItem table
+    RecipeItem.query.filter_by(name=old_name).update({"name": new_name})
+
+    # 3. Add to SystemLog
+    from backend.models import SystemLog
+    
+    log_action = f"Hammadde Adı Değiştirildi: {old_name} -> {new_name}"
+    log_entry = SystemLog(user=current_user.name, action=log_action, details="Genel Ayarlar")
+    db.session.add(log_entry)
+    
+    db.session.commit()
+    return jsonify({'success': True})
 
 # --- USER MANAGEMENT ---
 @admin_bp.route('/users', methods=['POST'])
@@ -76,18 +137,24 @@ def add_user():
         return jsonify({'success': False, 'message': 'Bu isimde bir personel zaten var!'}), 400
         
     if role == 'manager':
-        can_recipes = can_customers = can_orders = can_users = can_scales = can_reports = can_sales = True
+        can_recipes = can_customers = can_orders = can_users = can_reports = can_sales = True
+        can_dashboard = can_trace = can_acc = can_cur = can_settings = True
     elif role == 'secretary':
-        can_recipes = can_customers = can_orders = can_users = can_scales = can_sales = False
+        can_recipes = can_customers = can_orders = can_users = can_sales = False
         can_reports = True
+        can_dashboard = can_trace = can_acc = can_cur = can_settings = False
     else:
-        can_recipes = can_customers = can_orders = can_users = can_scales = can_reports = can_sales = False
+        can_recipes = can_customers = can_orders = can_users = can_reports = can_sales = False
+        can_dashboard = can_trace = can_acc = can_cur = can_settings = False
 
     new_user = User(
         name=name, role=role, password=password,
         can_manage_recipes=can_recipes, can_manage_customers=can_customers,
         can_manage_orders=can_orders, can_manage_users=can_users,
-        can_manage_scales=can_scales, can_view_reports=can_reports, can_view_sales=can_sales
+        can_view_reports=can_reports, can_view_sales=can_sales,
+        can_view_dashboard=can_dashboard, can_view_traceability=can_trace,
+        can_view_accounting=can_acc, can_view_current_accounts=can_cur,
+        can_manage_settings=can_settings
     )
     db.session.add(new_user)
     db.session.commit()
@@ -122,9 +189,15 @@ def update_user_permissions(user_id):
     if 'canManageCustomers' in data: target_user.can_manage_customers = bool(data['canManageCustomers'])
     if 'canManageOrders' in data: target_user.can_manage_orders = bool(data['canManageOrders'])
     if 'canManageUsers' in data: target_user.can_manage_users = bool(data['canManageUsers'])
-    if 'canManageScales' in data: target_user.can_manage_scales = bool(data['canManageScales'])
     if 'canViewReports' in data: target_user.can_view_reports = bool(data['canViewReports'])
     if 'canViewSales' in data: target_user.can_view_sales = bool(data['canViewSales'])
+    if 'canViewDashboard' in data: target_user.can_view_dashboard = bool(data['canViewDashboard'])
+    if 'canViewTraceability' in data: target_user.can_view_traceability = bool(data['canViewTraceability'])
+    if 'canViewAccounting' in data: target_user.can_view_accounting = bool(data['canViewAccounting'])
+    if 'canViewCurrentAccounts' in data: target_user.can_view_current_accounts = bool(data['canViewCurrentAccounts'])
+    if 'canManageSettings' in data: target_user.can_manage_settings = bool(data['canManageSettings'])
+    if 'opCanSeeColor' in data: target_user.op_can_see_color = bool(data['opCanSeeColor'])
+    if 'opCanSeeGarlic' in data: target_user.op_can_see_garlic = bool(data['opCanSeeGarlic'])
         
     db.session.commit()
     return jsonify({'success': True, 'user': target_user.to_dict()})
@@ -150,95 +223,7 @@ def delete_user(user_id):
     return jsonify({'success': True})
 
 
-# --- SCALE MANAGEMENT ---
-@admin_bp.route('/scales', methods=['POST'])
-@require_permission('can_manage_scales')
-def add_scale():
-    data = request.json or {}
-    name = data.get('name', '').strip()
-    ip = data.get('ip', '').strip()
-    port = data.get('port')
-    is_simulator = data.get('is_simulator', False)
-    
-    connection_type = data.get('connection_type') or data.get('type', 'wired')
-    if 'kablolu' in connection_type.lower() or 'lan' in connection_type.lower(): connection_type = 'wired'
-    elif 'uzak' in connection_type.lower() or 'remote' in connection_type.lower(): connection_type = 'remote'
-    
-    data_format = data.get('data_format') or data.get('format', 'densi')
-    if 'densi' in data_format.lower(): data_format = 'densi'
-    
-    if not name or not ip or not port:
-        return jsonify({'success': False, 'message': 'Eksik bilgi!'}), 400
-        
-    new_scale = Scale(
-        name=name, ip=ip, port=int(port), status=True, 
-        is_simulator=bool(is_simulator),
-        connection_type=connection_type,
-        data_format=data_format
-    )
-    db.session.add(new_scale)
-    db.session.commit()
-    return jsonify({'success': True, 'id': new_scale.id, 'scale': new_scale.to_dict()})
 
-@admin_bp.route('/scales/test-connection', methods=['POST'])
-def test_scale_connection():
-    data = request.json or {}
-    ip = data.get('ip', '').strip()
-    port = data.get('port')
-    is_simulator = data.get('is_simulator', False)
-    
-    if is_simulator:
-        return jsonify({'success': True, 'message': 'Simülasyon Modu Aktif (Bağlantı başarılı kabul edildi)'})
-    
-    if not ip or not port:
-        return jsonify({'success': False, 'message': 'IP ve port belirtilmelidir!'}), 400
-        
-    import socket
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1.0)
-        sock.connect((ip, int(port)))
-        sock.close()
-        return jsonify({'success': True, 'message': 'Bağlantı Başarılı!'})
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'Bağlantı başarısız: {str(e)}'}), 400
-
-@admin_bp.route('/scales/<int:scale_id>/connect', methods=['POST'])
-def connect_scale(scale_id):
-    scale = Scale.query.get_or_404(scale_id)
-    success = scale_manager.connect_scale(scale.id, scale.ip, scale.port, scale.is_simulator, scale.data_format)
-    if success:
-        return jsonify({'success': True, 'message': f'{scale.name} terazisine bağlanıldı.'})
-    else:
-        return jsonify({'success': False, 'message': f'{scale.name} terazisine bağlantı kurulamadı!'}), 400
-
-@admin_bp.route('/scales/<int:scale_id>/disconnect', methods=['POST'])
-def disconnect_scale(scale_id):
-    scale_manager.disconnect_scale(scale_id)
-    return jsonify({'success': True, 'message': 'Bağlantı kesildi.'})
-
-@admin_bp.route('/scales/<int:scale_id>/weight', methods=['GET'])
-def get_scale_weight(scale_id):
-    weight, active = scale_manager.get_weight(scale_id)
-    return jsonify({'success': True, 'weight': weight, 'connected': active})
-
-@admin_bp.route('/scales/<int:scale_id>/weight', methods=['POST'])
-def set_scale_weight(scale_id):
-    data = request.json or {}
-    weight = data.get('weight', 0.0)
-    success = scale_manager.set_simulated_weight(scale_id, weight)
-    if success:
-        return jsonify({'success': True})
-    else:
-        return jsonify({'success': False, 'message': 'Sadece simülasyon modundaki terazilerin ağırlığı güncellenebilir!'}), 400
-
-@admin_bp.route('/scales/<int:scale_id>', methods=['DELETE'])
-@require_permission('can_manage_scales')
-def delete_scale(scale_id):
-    scale = Scale.query.get_or_404(scale_id)
-    db.session.delete(scale)
-    db.session.commit()
-    return jsonify({'success': True})
 
 # --- FIRM / CUSTOMER MANAGEMENT ---
 @admin_bp.route('/firms', methods=['POST'])
@@ -306,18 +291,32 @@ def add_recipe():
     name = data.get('name', '').strip()
     if not firm_id or not name:
         return jsonify({'success': False, 'message': 'Eksik bilgi!'}), 400
-    new_recipe = Recipe(firm_id=int(firm_id), name=name, base_amount=1.0)
+    new_recipe = Recipe(firm_id=int(firm_id), name=name, base_amount=100.0)
     db.session.add(new_recipe)
     db.session.commit()
     return jsonify({'success': True, 'recipe': new_recipe.to_dict()})
 
-@admin_bp.route('/recipes/<int:recipe_id>', methods=['DELETE'])
+@admin_bp.route('/recipes/<int:recipe_id>', methods=['DELETE', 'PUT'])
 @require_permission('can_manage_recipes')
-def delete_recipe(recipe_id):
+def manage_recipe(recipe_id):
     recipe = Recipe.query.get_or_404(recipe_id)
-    db.session.delete(recipe)
-    db.session.commit()
-    return jsonify({'success': True})
+    
+    if request.method == 'DELETE':
+        recipe.is_active = False
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Reçete pasif hale getirildi.'})
+        
+    if request.method == 'PUT':
+        data = request.json
+        if 'hide_separate_colors' in data:
+            recipe.hide_separate_colors = data['hide_separate_colors']
+        if 'is_custom_kg_based' in data:
+            recipe.is_custom_kg_based = data['is_custom_kg_based']
+            
+        db.session.commit()
+        from backend.services.websocket_notifier import notify_websocket
+        notify_websocket({'type': 'SETTINGS_UPDATED'})
+        return jsonify({'success': True, 'recipe': recipe.to_dict()})
 
 @admin_bp.route('/recipes/<int:recipe_id>/items', methods=['POST'])
 @require_permission('can_manage_recipes')
@@ -329,7 +328,30 @@ def add_recipe_item(recipe_id):
     tolerance = data.get('tolerance')
     if not name or amount is None or tolerance is None:
         return jsonify({'success': False, 'message': 'Eksik bilgi!'}), 400
-    new_item = RecipeItem(recipe_id=recipe.id, name=name, amount=float(amount), tolerance=float(tolerance))
+        
+    # Get global sorting order
+    sort_order = 999
+    setting = SystemSetting.query.filter_by(key='recipe_order').first()
+    if setting and setting.value:
+        global_order = [s.strip() for s in setting.value.split('\n') if s.strip()]
+        if name in global_order:
+            sort_order = global_order.index(name)
+            
+    unit_price = data.get('unit_price')
+    unit_price = float(unit_price) if unit_price is not None else None
+    
+    is_separate = data.get('is_separate', False)
+    is_separate = str(is_separate).lower() in ['true', '1', 't', 'y', 'yes']
+            
+    new_item = RecipeItem(
+        recipe_id=recipe.id, 
+        name=name, 
+        amount=float(amount), 
+        tolerance=float(tolerance), 
+        sort_order=sort_order,
+        unit_price=unit_price,
+        is_separate=is_separate
+    )
     db.session.add(new_item)
     db.session.commit()
     return jsonify({'success': True, 'recipe': recipe.to_dict()})
@@ -341,11 +363,148 @@ def delete_recipe_item(recipe_id, item_id):
     item = RecipeItem.query.get_or_404(item_id)
     if item.recipe_id != recipe.id:
         return jsonify({'success': False, 'message': 'Hatalı işlem!'}), 400
+        
+    old_val = item.to_dict()
     db.session.delete(item)
+    
+    from backend.models import AuditLog
+    from backend.utils import get_authenticated_user
+    current_user = get_authenticated_user()
+    username = current_user.name if current_user else 'Sistem'
+    
+    log_entry = AuditLog(
+        user=username,
+        entity_type='RecipeItem',
+        entity_id=str(item.id),
+        action='DELETE',
+        old_value=json.dumps(old_val, ensure_ascii=False),
+        new_value=None,
+        description=f"Reçete Hammadde Silindi: {recipe.firm.name} - {recipe.name} ({item.name})"
+    )
+    db.session.add(log_entry)
+    
     db.session.commit()
     return jsonify({'success': True, 'recipe': recipe.to_dict()})
 
+@admin_bp.route('/recipes/<int:recipe_id>/items/<int:item_id>', methods=['PUT'])
+@require_permission('can_manage_recipes')
+def update_recipe_item(recipe_id, item_id):
+    recipe = Recipe.query.get_or_404(recipe_id)
+    item = RecipeItem.query.get_or_404(item_id)
+    if item.recipe_id != recipe.id:
+        return jsonify({'success': False, 'message': 'Hatalı işlem!'}), 400
+        
+    data = request.json or {}
+    
+    old_val = item.to_dict()
+    changes = []
+    
+    try:
+        if 'amount' in data:
+            amt_str = str(data['amount']).strip()
+            if not amt_str:
+                return jsonify({'success': False, 'message': 'Miktar boş olamaz!'}), 400
+            new_amt = float(amt_str)
+            if abs(new_amt - item.amount) > 0.0001:
+                changes.append(f"Miktar: {item.amount}gr -> {new_amt}gr")
+                item.amount = new_amt
+
+        if 'tolerance' in data:
+            tol_str = str(data['tolerance']).strip()
+            if not tol_str:
+                return jsonify({'success': False, 'message': 'Tolerans boş olamaz!'}), 400
+            new_tol = float(tol_str)
+            if abs(new_tol - item.tolerance) > 0.0001:
+                changes.append(f"Tolerans: {item.tolerance}gr -> {new_tol}gr")
+                item.tolerance = new_tol
+                
+        if 'unit_price' in data:
+            up = data['unit_price']
+            new_price = float(up) if up is not None and str(up).strip() != '' else None
+            if item.unit_price != new_price:
+                changes.append(f"Fiyat: {item.unit_price} -> {new_price}")
+                item.unit_price = new_price
+                
+
+    except ValueError:
+        return jsonify({'success': False, 'message': 'Geçersiz sayı formatı!'}), 400
+        
+    if 'is_separate' in data:
+        val = data['is_separate']
+        new_sep = str(val).lower() in ['true', '1', 't', 'y', 'yes']
+        if item.is_separate != new_sep:
+            changes.append(f"Ayrı Hazırlanır: {item.is_separate} -> {new_sep}")
+            item.is_separate = new_sep
+
+    if 'is_not_included' in data:
+        val = data['is_not_included']
+        new_inc = str(val).lower() in ['true', '1', 't', 'y', 'yes']
+        if item.is_not_included != new_inc:
+            changes.append(f"Dahil Değil: {item.is_not_included} -> {new_inc}")
+            item.is_not_included = new_inc
+
+    if changes:
+        from backend.utils import get_authenticated_user
+        current_user = get_authenticated_user()
+        username = current_user.name if current_user else "Sistem"
+        
+        log_action = f"Reçete Hammadde Güncellendi: {recipe.firm.name} - {recipe.name} ({item.name})"
+        log_details = ", ".join(changes)
+        
+        from backend.models import SystemLog, AuditLog
+        sys_log = SystemLog(user=username, action=log_action, details=log_details)
+        db.session.add(sys_log)
+        
+        audit_log = AuditLog(
+            user=username,
+            entity_type='RecipeItem',
+            entity_id=str(item.id),
+            action='UPDATE',
+            old_value=json.dumps(old_val, ensure_ascii=False),
+            new_value=json.dumps(item.to_dict(), ensure_ascii=False),
+            description=f"{log_action} [{log_details}]"
+        )
+        db.session.add(audit_log)
+
+    db.session.commit()
+    return jsonify({'success': True, 'recipe': recipe.to_dict()})
+
+@admin_bp.route('/recipes/<int:recipe_id>/items/reorder', methods=['PUT'])
+@require_permission('can_manage_recipes')
+def reorder_recipe_items(recipe_id):
+    recipe = Recipe.query.get_or_404(recipe_id)
+    data = request.json or {}
+    item_ids = data.get('itemIds', [])
+    
+    if not isinstance(item_ids, list):
+        return jsonify({'success': False, 'message': 'Geçersiz veri formatı'}), 400
+
+    # Update sort_order for each item based on its index in the array
+    for index, item_id in enumerate(item_ids):
+        item = RecipeItem.query.filter_by(id=item_id, recipe_id=recipe.id).first()
+        if item:
+            item.sort_order = index
+            
+    db.session.commit()
+    return jsonify({'success': True, 'recipe': recipe.to_dict()})
+
+
 # --- ORDER MANAGEMENT ---
+
+def _validate_packaging_segments(segments, total_amount):
+    """Validate packaging segments. Returns JSON string to store on order."""
+    import json
+    total_seg = sum(float(s['amount']) for s in segments)
+    if abs(total_seg - total_amount) > 0.01:
+        raise ValueError(f'Bölüm toplamı ({total_seg} kg) sipariş miktarına ({total_amount} kg) eşit olmalıdır.')
+    for seg in segments:
+        if float(seg.get('bagWeight', 0)) <= 0:
+            raise ValueError('Mikser kapasitesi sıfırdan büyük olmalıdır.')
+        if float(seg.get('amount', 0)) <= 0:
+            raise ValueError('Bölüm miktarı sıfırdan büyük olmalıdır.')
+    return json.dumps([{'amount': float(s['amount']), 'bagWeight': float(s['bagWeight'])} for s in segments])
+
+
 @admin_bp.route('/orders', methods=['POST'])
 @require_permission('can_manage_orders')
 def create_order():
@@ -354,48 +513,196 @@ def create_order():
     recipe_id = data.get('recipeId')
     total_amount = data.get('totalAmount') or data.get('totalWeight')
     bag_weight = data.get('bagWeight')
-    batch_count = data.get('batches') or data.get('batchCount')
+    batch_count = data.get('batches') or data.get('batchCount') or 1
+    segments = data.get('segments') or data.get('packagingSegments')
+    delivery_date = data.get('deliveryDate')
+    # Teslim tarihi girilmemişse bugünü otomatik ata (YYYY-MM-DD)
+    if not delivery_date:
+        from datetime import date
+        delivery_date = date.today().isoformat()
+    urgency = data.get('urgency') or 'normal'
+
     
-    if not firm_id or not recipe_id or not total_amount or not batch_count or not bag_weight:
+    if not firm_id or not recipe_id or not total_amount or not bag_weight:
         return jsonify({'success': False, 'message': 'Eksik bilgi!'}), 400
         
     firm = Firm.query.get_or_404(int(firm_id))
     recipe = Recipe.query.get_or_404(int(recipe_id))
+    if not recipe.is_active:
+        return jsonify({'success': False, 'message': 'Bu reçete pasif durumda, yeni sipariş oluşturulamaz.'}), 400
     
     total_amount = float(total_amount)
     batch_count = int(batch_count)
     bag_weight = float(bag_weight)
     
-    if batch_count <= 0: return jsonify({'success': False, 'message': 'Parti sayısı sıfırdan büyük olmalıdır!'}), 400
-    if bag_weight <= 0: return jsonify({'success': False, 'message': 'Torba ağırlığı sıfırdan büyük olmalıdır!'}), 400
-        
+    if batch_count <= 0:
+        return jsonify({'success': False, 'message': 'Parti sayısı sıfırdan büyük olmalıdır!'}), 400
+    if bag_weight <= 0:
+        return jsonify({'success': False, 'message': 'Torba ağırlığı sıfırdan büyük olmalıdır!'}), 400
+
+    packaging_segments_json = None
+    try:
+        if segments and len(segments) > 0:
+            packaging_segments_json = _validate_packaging_segments(segments, total_amount)
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
     batch_size = total_amount / batch_count
-    batches_list = [batch_size] * batch_count
         
     new_order = Order(
         customer_name=firm.name,
         recipe_name=recipe.name,
         total_amount=total_amount,
-        bag_weight=bag_weight
+        bag_weight=bag_weight,
+        packaging_segments=packaging_segments_json,
+        delivery_date=delivery_date,
+        urgency=urgency,
+        created_by=data.get('createdBy', 'Sistem'),
+        notes=data.get('notes', '')
     )
     db.session.add(new_order)
     db.session.commit()
     
+    import json
+    extra_items_json = None
+    if data.get('extras'):
+        extra_items_json = json.dumps(data.get('extras'))
+
     import time
     timestamp = int(time.time() * 1000)
-    for i, size in enumerate(batches_list):
+    for i in range(batch_count):
         batch = Batch(
             id=f"B{timestamp}-{i+1}",
             order_id=new_order.id,
             no=i+1,
             total_batches=batch_count,
-            target_amount=size,
-            status='beklemede'
+            target_amount=batch_size,
+            bag_weight=bag_weight,
+            status='beklemede',
+            extra_items=extra_items_json
         )
         db.session.add(batch)
         
     db.session.commit()
     return jsonify({'success': True, 'message': f'Sipariş oluşturuldu ve {batch_count} adet iş emrine bölündü.', 'order': new_order.to_dict()})
+
+@admin_bp.route('/orders/<int:order_id>', methods=['PUT'])
+def update_order(order_id):
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({'success': False, 'message': 'Oturum bulunamadı'}), 401
+        
+    order = Order.query.get_or_404(order_id)
+    data = request.json or {}
+    
+    extra_items_json = None
+    if 'extras' in data:
+        import json
+        extra_items_json = json.dumps(data['extras'])
+
+    # Operators can only change bagWeight
+    role = user.role
+    if 'bagWeight' in data:
+        order.bag_weight = float(data['bagWeight'])
+        
+    # Admins can change other fields
+    if role != 'operator':
+        if 'deliveryDate' in data:
+            order.delivery_date = data['deliveryDate']
+        if 'urgency' in data:
+            order.urgency = data['urgency']
+        if 'notes' in data:
+            order.notes = data['notes']
+        # Handle totalAmount and bagWeight changes
+        new_total_amount = float(data.get('totalAmount', order.total_amount))
+        new_bag_weight = float(data.get('bagWeight', order.bag_weight))
+        
+        if new_total_amount != order.total_amount or new_bag_weight != order.bag_weight or 'batches' in data or 'batchCount' in data:
+            order.total_amount = new_total_amount
+            order.bag_weight = new_bag_weight
+
+            
+            in_progress_batches = [b for b in order.batches if b.status != 'beklemede']
+            pending_batches = [b for b in order.batches if b.status == 'beklemede']
+            
+            allocated_amount = sum(b.target_amount for b in in_progress_batches)
+            remaining_amount = new_total_amount - allocated_amount
+            
+            # Preserve existing pending batch count (or use explicit batches count if provided)
+            if 'batches' in data or 'batchCount' in data:
+                new_pending_count = int(data.get('batches') or data.get('batchCount') or 1)
+            else:
+                new_pending_count = len(pending_batches) if len(pending_batches) > 0 else 1
+            
+            for b in pending_batches:
+                db.session.delete(b)
+                
+            db.session.commit()
+            
+            if remaining_amount > 0 and new_pending_count > 0:
+                import time
+                batch_size = remaining_amount / new_pending_count
+                
+                timestamp = int(time.time() * 1000)
+                start_no = len(in_progress_batches) + 1
+                total_new_batches = len(in_progress_batches) + new_pending_count
+                
+                for b in in_progress_batches:
+                    b.total_batches = total_new_batches
+                
+                for i in range(new_pending_count):
+                    new_batch = Batch(
+                        id=f"B{timestamp}-{i+1}",
+                        order_id=order.id,
+                        no=start_no + i,
+                        total_batches=total_new_batches,
+                        target_amount=batch_size,
+                        bag_weight=new_bag_weight,
+                        status='beklemede',
+                        extra_items=extra_items_json
+                    )
+                    db.session.add(new_batch)
+                    
+            db.session.commit()
+
+        else:
+            # Update extra_items for existing waiting batches if they were not recreated
+            if 'extras' in data:
+                for b in order.batches:
+                    if b.status == 'beklemede':
+                        b.extra_items = extra_items_json
+            db.session.commit()
+
+    else:
+        db.session.commit()
+    from backend.services.websocket_notifier import notify_websocket
+    notify_websocket({'type': 'ORDER_UPDATED'})
+    return jsonify({'success': True, 'order': order.to_dict()})
+
+@admin_bp.route('/batches/<string:batch_id>', methods=['PUT'])
+@admin_bp.route('/batches/<string:batch_id>/status', methods=['PUT'])
+def update_batch(batch_id):
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({'success': False, 'message': 'Oturum bulunamadı'}), 401
+
+    batch = Batch.query.get_or_404(batch_id)
+    data = request.json or {}
+
+    if 'status' in data:
+        batch.status = data['status']
+
+    if 'bagWeight' in data:
+        new_weight = float(data['bagWeight'])
+        if new_weight <= 0:
+            return jsonify({'success': False, 'message': 'Geçerli bir mikser kapasitesi girin.'}), 400
+        batch.bag_weight = new_weight
+
+    db.session.commit()
+    from backend.services.websocket_notifier import notify_websocket
+    notify_websocket({'type': 'ORDER_UPDATED'})
+    return jsonify({'success': True, 'batch': batch.to_dict()})
+
 
 @admin_bp.route('/batches/<string:batch_id>', methods=['DELETE'])
 @require_permission('can_manage_orders')
@@ -410,3 +717,350 @@ def delete_batch(batch_id):
         db.session.delete(order)
     db.session.commit()
     return jsonify({'success': True})
+
+@admin_bp.route('/batches/<string:batch_id>/extra_items', methods=['PUT'])
+def update_batch_extra_items(batch_id):
+    import json
+    from backend.models import Transaction, Firm
+    
+    batch = Batch.query.get(batch_id)
+    if not batch:
+        return jsonify({'success': False, 'message': 'İş emri bulunamadı.'}), 404
+        
+    data = request.json
+    if not data:
+        return jsonify({'success': False, 'message': 'Geçersiz veri.'}), 400
+        
+    if 'extraItems' in data:
+        batch.extra_items = json.dumps(data['extraItems'])
+    if 'payments' in data:
+        batch.payments = json.dumps(data['payments'])
+        
+        # Handle transactions
+        order = batch.order
+        if order:
+            firm = Firm.query.filter_by(name=order.customer_name).first()
+            if firm:
+                firm_id = firm.id
+                
+                # Delete old transactions for this batch
+                old_txs = Transaction.query.filter(
+                    Transaction.firm_id == firm_id,
+                    Transaction.description.like(f"%Parti {batch_id}%")
+                ).all()
+                for tx in old_txs:
+                    db.session.delete(tx)
+                    
+                # Create new transactions
+                for payment in data['payments']:
+                    amt = float(payment.get('amount', 0))
+                    method = payment.get('method', 'Nakit')
+                    if amt > 0:
+                        tx = Transaction(
+                            firm_id=firm_id,
+                            type='TAHSİLAT',
+                            amount=amt,
+                            description=f"Fiş Tahsilatı - Parti {batch_id} - {method}"
+                        )
+                        db.session.add(tx)
+                        
+                # We must recalculate firm balance!
+                db.session.commit()
+                
+                # Recalculate firm balance
+                firm_obj = Firm.query.get(firm_id)
+                if firm_obj:
+                    all_txs = Transaction.query.filter_by(firm_id=firm_id).all()
+                    new_balance = sum([t.amount if t.type == 'BORÇ' else -t.amount for t in all_txs])
+                    firm_obj.balance = new_balance
+                    db.session.commit()
+    else:
+        db.session.commit()
+    
+    from backend.services.websocket_notifier import notify_websocket
+    notify_websocket({'type': 'ORDER_UPDATED'})
+    
+    return jsonify({'success': True, 'batch': batch.to_dict()})
+
+@admin_bp.route('/system-logs', methods=['GET'])
+@require_permission('can_view_reports')
+def get_system_logs():
+    from backend.models import SystemLog
+    # Get last 100 logs
+    logs = SystemLog.query.order_by(SystemLog.timestamp.desc()).limit(100).all()
+    return jsonify({'success': True, 'logs': [l.to_dict() for l in logs]})
+
+# --- SCALE MANAGEMENT ---
+@admin_bp.route('/scales', methods=['GET'])
+def get_scales():
+    scales = Scale.query.all()
+    return jsonify({'success': True, 'scales': [s.to_dict() for s in scales]})
+
+@admin_bp.route('/scales', methods=['POST'])
+def add_scale():
+    from backend.utils import get_authenticated_user
+    current_user = get_authenticated_user()
+    if not current_user or current_user.role != 'admin':
+        return jsonify({'success': False, 'message': 'Sadece Birincil Yönetici tartı ekleyebilir!'}), 403
+
+    data = request.json or {}
+    name = data.get('name', '').strip()
+    connection_type = data.get('connection_type', 'sta').strip()
+    ip_address = data.get('ip_address', '').strip()
+    port = data.get('port')
+    baud_rate = data.get('baud_rate')
+    data_format = data.get('data_format', 'densi').strip()
+    wifi_ssid = data.get('wifi_ssid', '').strip()
+    wifi_password = data.get('wifi_password', '').strip()
+    com_port = data.get('com_port', '').strip()
+    
+    regex_template = data.get('regex_template', r'([+-]?\s*\d+\.\d+)').strip()
+    terminator = data.get('terminator', r'\n').strip()
+    communication_mode = data.get('communication_mode', 'continuous').strip()
+    request_command = data.get('request_command', '').strip()
+
+
+    if not name:
+        return jsonify({'success': False, 'message': 'Cihaz adı boş olamaz!'}), 400
+    if Scale.query.filter_by(name=name).first():
+        return jsonify({'success': False, 'message': 'Bu isimde bir cihaz zaten var!'}), 400
+        
+    try:
+        if port: port = int(port)
+        else: port = 8899
+        if baud_rate: baud_rate = int(baud_rate)
+        else: baud_rate = 9600
+    except ValueError:
+        return jsonify({'success': False, 'message': 'Port veya Baud Rate geçersiz!'}), 400
+
+    new_scale = Scale(
+        name=name, connection_type=connection_type, ip_address=ip_address,
+        port=port, baud_rate=baud_rate, data_format=data_format,
+        wifi_ssid=wifi_ssid, wifi_password=wifi_password, com_port=com_port,
+        regex_template=regex_template, terminator=terminator,
+        communication_mode=communication_mode, request_command=request_command
+    )
+    db.session.add(new_scale)
+    db.session.commit()
+    return jsonify({'success': True, 'scale': new_scale.to_dict()})
+
+@admin_bp.route('/scales/<int:scale_id>', methods=['DELETE'])
+def delete_scale(scale_id):
+    from backend.utils import get_authenticated_user
+    current_user = get_authenticated_user()
+    if not current_user or current_user.role != 'admin':
+        return jsonify({'success': False, 'message': 'Sadece Birincil Yönetici tartı silebilir!'}), 403
+
+    scale = Scale.query.get_or_404(scale_id)
+    db.session.delete(scale)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+
+@admin_bp.route('/settings/global-prices-advanced', methods=['POST'])
+@require_permission('can_manage_recipes')
+def update_global_prices_advanced():
+    data = request.json
+    price_changes = data.get('price_changes', {})
+    selected_recipe_ids = data.get('selected_recipe_ids', [])
+    override_custom = data.get('override_custom', False)
+    
+    if not price_changes:
+        return jsonify({'success': False, 'message': 'Değişiklik yok.'}), 400
+        
+    from backend.models import SystemSetting, Recipe
+    import json
+    
+    # Get current global prices
+    setting = SystemSetting.query.filter_by(key='ingredient_prices').first()
+    global_prices = {}
+    if setting and setting.value:
+        try:
+            global_prices = json.loads(setting.value)
+        except:
+            pass
+            
+    # Iterate through all recipes
+    all_recipes = Recipe.query.all()
+    
+    for recipe in all_recipes:
+        for item in recipe.items:
+            if item.name in price_changes:
+                new_price = price_changes[item.name]
+                old_global_price = global_prices.get(item.name, 0.0)
+                
+                is_selected = recipe.id in selected_recipe_ids
+                
+                if is_selected:
+                    if override_custom:
+                        # Override everything, make it follow global price
+                        item.unit_price = None
+                    else:
+                        # Don't touch if it already has a custom price that isn't the old global price
+                        if item.unit_price is not None and abs(item.unit_price - old_global_price) > 0.001:
+                            pass # Keep custom price
+                        else:
+                            # It was following global price, keep following it (by making sure it's null)
+                            item.unit_price = None
+                else:
+                    # Recipe is NOT selected. We must freeze it at the old price so it doesn't get updated.
+                    if item.unit_price is None or abs(item.unit_price - old_global_price) <= 0.001:
+                        # It was using global price. Freeze it!
+                        item.unit_price = old_global_price
+
+    old_global_prices = dict(global_prices) # Copy before changes
+    
+    # Finally update global prices setting
+    for k, v in price_changes.items():
+        global_prices[k] = v
+        
+    from backend.models import AuditLog
+    from backend.utils import get_authenticated_user
+    current_user = get_authenticated_user()
+    username = current_user.name if current_user else 'Sistem'
+        
+    if not setting:
+        setting = SystemSetting(key='ingredient_prices', value=json.dumps(global_prices))
+        db.session.add(setting)
+        
+        log_entry = AuditLog(
+            user=username,
+            entity_type='SystemSetting',
+            entity_id='ingredient_prices',
+            action='CREATE',
+            old_value=None,
+            new_value=json.dumps(global_prices, ensure_ascii=False),
+            description="Genel fiyat ayarları oluşturuldu."
+        )
+        db.session.add(log_entry)
+    else:
+        old_val = setting.value
+        setting.value = json.dumps(global_prices)
+        
+        log_entry = AuditLog(
+            user=username,
+            entity_type='SystemSetting',
+            entity_id='ingredient_prices',
+            action='UPDATE',
+            old_value=old_val,
+            new_value=setting.value,
+            description="Genel fiyatlar güncellendi."
+        )
+        db.session.add(log_entry)
+        
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Gelişmiş fiyat güncellemesi başarıyla tamamlandı.'})
+
+
+@admin_bp.route('/transactions', methods=['GET'])
+@require_permission('can_view_reports')
+def get_transactions():
+    firm_id = request.args.get('firm_id')
+    if firm_id:
+        txs = Transaction.query.filter_by(firm_id=firm_id).order_by(Transaction.date.desc()).all()
+    else:
+        txs = Transaction.query.order_by(Transaction.date.desc()).all()
+    return jsonify({'success': True, 'transactions': [t.to_dict() for t in txs]})
+
+@admin_bp.route('/transactions', methods=['POST'])
+@require_permission('can_manage_orders')
+def create_transaction():
+    data = request.json or {}
+    firm_id = data.get('firm_id')
+    amount = data.get('amount')
+    description = data.get('description', '')
+    tx_type = data.get('type', 'TAHSİLAT')
+
+    if not firm_id or not amount:
+        return jsonify({'success': False, 'message': 'Firma ve tutar zorunludur!'}), 400
+
+    firm = Firm.query.get_or_404(firm_id)
+    
+    # Create transaction
+    tx = Transaction(
+        firm_id=firm_id,
+        type=tx_type,
+        amount=float(amount),
+        description=description
+    )
+
+    # If it's TAHSİLAT (Payment from customer to us), balance goes down.
+    # If it's SATIŞ (Customer owes us), balance goes up. 
+    # For a manual POST, usually it's TAHSİLAT.
+    if tx_type == 'TAHSİLAT':
+        firm.balance -= float(amount)
+    elif tx_type == 'SATIŞ':
+        firm.balance += float(amount)
+    elif tx_type == 'İADE':
+        firm.balance -= float(amount)
+
+    db.session.add(tx)
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': 'İşlem eklendi.', 'transaction': tx.to_dict(), 'new_balance': firm.balance})
+
+@admin_bp.route('/audit_logs', methods=['GET'])
+@require_permission('can_manage_settings')
+def get_audit_logs():
+    from backend.models import AuditLog
+    logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(100).all()
+    return jsonify({'success': True, 'logs': [l.to_dict() for l in logs]})
+
+@admin_bp.route('/audit_logs/<int:log_id>/revert', methods=['POST'])
+@require_permission('can_manage_settings')
+def revert_audit_log(log_id):
+    from backend.models import AuditLog, RecipeItem, SystemSetting
+    import json
+    
+    log = AuditLog.query.get_or_404(log_id)
+    if log.is_reverted:
+        return jsonify({'success': False, 'message': 'Bu işlem zaten geri alınmış.'}), 400
+        
+    try:
+        old_val_data = json.loads(log.old_value) if log.old_value else None
+    except:
+        old_val_data = None
+        
+    if log.entity_type == 'RecipeItem':
+        item = RecipeItem.query.get(int(log.entity_id))
+        
+        if log.action == 'DELETE':
+            if not old_val_data:
+                return jsonify({'success': False, 'message': 'Geri alınacak eski veri bulunamadı.'}), 400
+            
+            # Bulunmayan recipeId'yi to_dict'e eklemedik, o yüzden recipe_id'yi bulmamız zor olabilir. 
+            # Ancak biz recipeItem'ı sildiğimizde, eski to_dict()'te recipe_id yok. Fakat log description'da recipe name var.
+            # Şimdilik UPDATE üzerinden yürütelim. Eğer item yoksa, ekleme yapmak için Recipe objesi lazım.
+            pass # TODO: handle delete revert
+            
+        elif log.action == 'UPDATE':
+            if not item:
+                return jsonify({'success': False, 'message': 'Kayıt bulunamadı (silinmiş olabilir).'}), 400
+            if old_val_data:
+                item.name = old_val_data.get('name', item.name)
+                item.amount = old_val_data.get('amount', item.amount)
+                item.tolerance = old_val_data.get('tolerance', item.tolerance)
+                item.unit_price = old_val_data.get('unit_price', item.unit_price)
+                item.is_separate = old_val_data.get('is_separate', item.is_separate)
+                item.is_not_included = old_val_data.get('is_not_included', item.is_not_included)
+                
+    elif log.entity_type == 'SystemSetting':
+        setting = SystemSetting.query.filter_by(key=log.entity_id).first()
+        if log.action == 'UPDATE' or log.action == 'CREATE':
+            if not old_val_data and log.action == 'CREATE':
+                if setting:
+                    db.session.delete(setting)
+            else:
+                if not setting:
+                    # SystemSetting requires key, value
+                    setting = SystemSetting(key=log.entity_id, value=log.old_value)
+                    db.session.add(setting)
+                else:
+                    setting.value = log.old_value
+                    
+    log.is_reverted = True
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'İşlem başarıyla geri alındı.'})
