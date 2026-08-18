@@ -175,3 +175,94 @@
         </div>
     </div>
 
+
+    <!-- Apply Recipe Order Modal Overlay -->
+    <div id="modal-apply-order-overlay"
+        class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="card bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-2xl max-w-2xl w-full shadow-2xl relative overflow-y-auto max-h-[90vh]">
+            <button id="btn-close-apply-order-modal"
+                class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+
+            <h3 class="text-xl font-extrabold font-outfit text-white mb-1 flex items-center gap-2">
+                <i data-lucide="list-checks" class="w-6 h-6 text-orange-400"></i> Sıralama Değişikliklerini Uygula
+            </h3>
+            <p class="text-slate-400 text-xs mb-6">Genel ayarlarda yaptığınız sıralama değişikliğini mevcut reçetelere nasıl uygulamak istersiniz?</p>
+
+            <div class="space-y-4">
+                <div class="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-3">Uygulama Modu Seçin</label>
+                    <div class="space-y-2">
+                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                            <input type="radio" name="apply_mode" value="all" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
+                            <span class="text-sm font-medium text-slate-200">Tüm Mevcut Reçetelere Uygula</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                            <input type="radio" name="apply_mode" value="none" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500" checked>
+                            <span class="text-sm font-medium text-slate-200">Hiçbirine Uygulama (Sadece varsayılan ayarı kaydet)</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                            <input type="radio" name="apply_mode" value="date_range" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
+                            <span class="text-sm font-medium text-slate-200">Şu Tarihler Arasındakilere Uygula</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                            <input type="radio" name="apply_mode" value="before_date" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
+                            <span class="text-sm font-medium text-slate-200">Şu Tarihten Öncekilere Uygula</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                            <input type="radio" name="apply_mode" value="after_date" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
+                            <span class="text-sm font-medium text-slate-200">Şu Tarihten Sonrakilere Uygula</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                            <input type="radio" name="apply_mode" value="include_specific" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
+                            <span class="text-sm font-medium text-slate-200">Özel Seçim (Sadece Şunlara Uygula)</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                            <input type="radio" name="apply_mode" value="exclude_specific" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
+                            <span class="text-sm font-medium text-slate-200">Özel Seçim (Şunlar Hariç Hepsine Uygula)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Dynamic input sections based on mode -->
+                <div id="apply-mode-inputs" class="hidden bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                    <!-- Date Range Inputs -->
+                    <div id="input-date-range" class="hidden flex gap-4">
+                        <div class="flex-1">
+                            <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Başlangıç Tarihi</label>
+                            <input type="date" id="apply-start-date" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Bitiş Tarihi</label>
+                            <input type="date" id="apply-end-date" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
+                        </div>
+                    </div>
+                    <!-- Single Date Input (Before/After) -->
+                    <div id="input-single-date" class="hidden">
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Referans Tarih</label>
+                        <input type="date" id="apply-single-date" class="w-full max-w-xs bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
+                    </div>
+                    <!-- Specific Selection Checkboxes -->
+                    <div id="input-specific-selection" class="hidden">
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Reçeteleri Seçin</label>
+                        <div class="mb-2">
+                            <input type="text" id="apply-recipe-search" placeholder="Reçete Ara..." class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500 mb-2">
+                            <button type="button" id="btn-select-all-recipes" class="text-xs font-bold text-orange-400 hover:text-orange-300">Hepsini Seç</button>
+                            <span class="text-slate-600 mx-2">|</span>
+                            <button type="button" id="btn-deselect-all-recipes" class="text-xs font-bold text-slate-400 hover:text-slate-300">Seçimi Temizle</button>
+                        </div>
+                        <div id="apply-recipe-list" class="max-h-48 overflow-y-auto space-y-1 pr-2 border border-slate-800 rounded bg-slate-950 p-2">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="flex justify-end gap-3 pt-6 mt-4 border-t border-slate-800">
+                <button type="button" id="btn-cancel-apply-order" class="btn btn-slate py-2.5 px-5 text-xs font-bold">İptal Et</button>
+                <button type="button" id="btn-confirm-apply-order" class="btn btn-orange py-2.5 px-6 text-xs font-bold shadow-lg shadow-orange-900/20">Değişiklikleri Onayla</button>
+            </div>
+        </div>
+    </div>

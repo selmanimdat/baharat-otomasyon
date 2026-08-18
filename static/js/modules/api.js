@@ -168,3 +168,17 @@ async function checkAuth() {
     }
 }
 
+
+async function apiGet(url) {
+    try {
+        const res = await fetch(url);
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.message || 'Veri çekme işlemi başarısız.');
+        }
+        return await res.json();
+    } catch (e) {
+        alert(e.message);
+        throw e;
+    }
+}

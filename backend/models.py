@@ -96,6 +96,8 @@ class Recipe(db.Model):
     price_per_kg = db.Column(db.Float, default=150.0)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     created_by = db.Column(db.String(100), nullable=True, default='Sistem')
+    updated_at = db.Column(db.DateTime, nullable=True, onupdate=lambda: datetime.now(timezone.utc))
+    updated_by = db.Column(db.String(100), nullable=True)
     hide_separate_colors = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     
@@ -113,6 +115,8 @@ class Recipe(db.Model):
             'pricePerKg': self.price_per_kg,
             'createdAt': self.created_at.replace(tzinfo=timezone.utc).isoformat() if self.created_at else None,
             'createdBy': self.created_by or 'Sistem',
+            'updatedAt': self.updated_at.replace(tzinfo=timezone.utc).isoformat() if getattr(self, 'updated_at', None) else None,
+            'updatedBy': getattr(self, 'updated_by', None),
             'hideSeparateColors': self.hide_separate_colors,
             'isActive': self.is_active if self.is_active is not None else True,
             'isCustomKgBased': getattr(self, 'is_custom_kg_based', False),
@@ -141,6 +145,27 @@ class RecipeItem(db.Model):
             'is_separate': self.is_separate,
             'is_not_included': getattr(self, 'is_not_included', False)
         }
+
+
+class RecipeArchive(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    recipe_id = db.Column(db.Integer, db.ForeignKey('recipe.id', ondelete='CASCADE'), nullable=False)
+    recipe_name = db.Column(db.String(200), nullable=False)
+    archived_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    archived_by = db.Column(db.String(100), nullable=False, default='Bilinmeyen')
+    recipe_data = db.Column(db.Text, nullable=False) # JSON representation of the entire recipe
+    
+    def to_dict(self):
+        import json
+        return {
+            'id': self.id,
+            'recipeId': self.recipe_id,
+            'recipeName': self.recipe_name,
+            'archivedAt': self.archived_at.replace(tzinfo=timezone.utc).isoformat() if self.archived_at else None,
+            'archivedBy': self.archived_by,
+            'recipeData': json.loads(self.recipe_data) if self.recipe_data else None
+        }
+
 
 class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)

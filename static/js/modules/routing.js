@@ -13,6 +13,15 @@ function updateUI() {
         renderAdminPanel();
     } else if (state.view === 'operator') {
         dom.viewOperator.classList.remove('hidden');
+        const adminBanner = document.getElementById('admin-return-banner');
+        if (adminBanner) {
+            const isManagerOrAdmin = state.currentUser && ['admin', 'manager'].includes(state.currentUser.role);
+            if (isManagerOrAdmin) {
+                adminBanner.classList.remove('hidden');
+            } else {
+                adminBanner.classList.add('hidden');
+            }
+        }
         renderOperatorPanel();
     }
     lucide.createIcons();

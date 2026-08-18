@@ -615,6 +615,12 @@ window.updateOrderFormSummary = function () {
     }
     if (bagWeightInput) {
         bagWeightInput.placeholder = isCustom ? "Örn: 25 (1 Paket Ağırlığı)" : "Örn: 250";
+        const hasSegments = window.orderSegments && window.orderSegments.length > 0;
+        if (hasSegments && !isCustom) {
+            bagWeightInput.required = false;
+        } else {
+            bagWeightInput.required = true;
+        }
     }
     if (lblBatches) {
         lblBatches.textContent = isCustom ? "İş Emri Parti Sayısı" : "Parti (Bölüm) Sayısı";
@@ -2384,6 +2390,42 @@ function initGlobalPriceModalHandlers() {
 
     document.querySelectorAll('.btn-close-quick-price-modal').forEach(btn => btn.addEventListener('click', closeQuickModal));
     document.getElementById('btn-floating-save-prices-quick')?.addEventListener('click', openQuickModal);
+    
+    document.getElementById('btn-floating-cancel-prices')?.addEventListener('click', async () => {
+        window.pendingGlobalPriceChanges = {};
+        updateFloatingPriceSaveButton();
+        
+        // Force inputs to revert visually immediately before fetching DB
+        const globalPrices = getGlobalIngredientPrices();
+        document.querySelectorAll('.global-price-input, .item-price').forEach(input => {
+            // Try to find the ingredient name from dataset or nearby label
+            let name = input.dataset.ingredientName;
+            if (!name) {
+                const row = input.closest('tr');
+                if (row) name = row.querySelector('td')?.textContent?.trim();
+            }
+            if (!name) {
+                const flexRow = input.closest('.flex-1');
+                if (flexRow) name = flexRow.querySelector('.ingredient-name-label')?.textContent?.trim();
+            }
+            
+            if (name && globalPrices[name] !== undefined) {
+                input.value = globalPrices[name] !== '' ? Number(globalPrices[name]).toFixed(2) : '';
+            } else if (name) {
+                input.value = '';
+            }
+            
+            // Reset status badges
+            const statusCell = input.closest('tr')?.querySelector('.global-price-status');
+            if (statusCell) {
+                statusCell.innerHTML = '<span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-500 border border-slate-700">Kayıtlı</span>';
+            }
+        });
+
+        await fetchDb();
+        if (state.adminTab === 'settings') renderSettingsTab();
+        if (state.adminTab === 'recipes') renderRecipesTab();
+    });
 
     document.getElementById('btn-confirm-quick-global-prices')?.addEventListener('click', async () => {
         const changes = window.pendingGlobalPriceChanges;
@@ -2469,6 +2511,40 @@ window.populateIngredientOptions = function populateIngredientOptions() {
     if (!nameInput || !listEl) return;
 
     const ingredients = getRecipeOrderIngredients();
+    let selectedIndex = -1;
+
+    const selectItem = (ingName) => {
+        if (!ingName) return;
+        nameInput.value = ingName;
+        listEl.classList.add('hidden');
+        selectedIndex = -1;
+
+        const priceInput = document.getElementById('ing-unit-price');
+        if (priceInput && !priceInput.value.trim()) {
+            const globalPrices = getGlobalIngredientPrices();
+            if (globalPrices[ingName] != null) {
+                priceInput.placeholder = Number(globalPrices[ingName]).toFixed(2);
+            }
+        }
+
+        const amountInput = document.getElementById('ing-amount');
+        if (amountInput) {
+            amountInput.focus();
+            amountInput.select();
+        }
+    };
+
+    const updateHighlight = () => {
+        const items = listEl.querySelectorAll('.autocomplete-item');
+        items.forEach((item, idx) => {
+            if (idx === selectedIndex) {
+                item.classList.add('bg-slate-700', 'text-orange-400', 'font-bold');
+                item.scrollIntoView({ block: 'nearest' });
+            } else {
+                item.classList.remove('bg-slate-700', 'text-orange-400', 'font-bold');
+            }
+        });
+    };
 
     const renderList = (filter = '') => {
         const q = filter.trim().toLowerCase();
@@ -2476,14 +2552,16 @@ window.populateIngredientOptions = function populateIngredientOptions() {
             ? ingredients.filter(ing => ing.toLowerCase().includes(q))
             : ingredients;
 
+        selectedIndex = -1;
+
         if (filtered.length === 0) {
             listEl.innerHTML = '<li class="px-3 py-2 text-slate-500 italic text-xs">Hammadde bulunamadı</li>';
             listEl.classList.remove('hidden');
             return;
         }
 
-        listEl.innerHTML = filtered.slice(0, 50).map(ing => `
-            <li class="px-3 py-2 hover:bg-slate-700 cursor-pointer text-slate-200" data-ing-name="${ing.replace(/"/g, '&quot;')}">${ing}</li>
+        listEl.innerHTML = filtered.slice(0, 50).map((ing, idx) => `
+            <li class="autocomplete-item px-3 py-2 hover:bg-slate-700 cursor-pointer text-slate-200" data-idx="${idx}" data-ing-name="${ing.replace(/"/g, '&quot;')}">${ing}</li>
         `).join('');
         listEl.classList.remove('hidden');
 
@@ -2491,16 +2569,7 @@ window.populateIngredientOptions = function populateIngredientOptions() {
             li.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 const ingName = li.getAttribute('data-ing-name') || '';
-                nameInput.value = ingName;
-                listEl.classList.add('hidden');
-
-                const priceInput = document.getElementById('ing-unit-price');
-                if (priceInput && !priceInput.value.trim()) {
-                    const globalPrices = getGlobalIngredientPrices();
-                    if (globalPrices[ingName] != null) {
-                        priceInput.placeholder = Number(globalPrices[ingName]).toFixed(2);
-                    }
-                }
+                selectItem(ingName);
             });
         });
     };
@@ -2510,7 +2579,106 @@ window.populateIngredientOptions = function populateIngredientOptions() {
         nameInput.addEventListener('focus', () => renderList(nameInput.value));
         nameInput.addEventListener('input', () => renderList(nameInput.value));
         nameInput.addEventListener('blur', () => {
-            setTimeout(() => listEl.classList.add('hidden'), 150);
+            setTimeout(() => {
+                listEl.classList.add('hidden');
+                selectedIndex = -1;
+            }, 150);
+        });
+
+        nameInput.addEventListener('keydown', (e) => {
+            const items = listEl.querySelectorAll('.autocomplete-item');
+            const isHidden = listEl.classList.contains('hidden');
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (isHidden) {
+                    renderList(nameInput.value);
+                    return;
+                }
+                if (items.length > 0) {
+                    selectedIndex = (selectedIndex + 1) % items.length;
+                    updateHighlight();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (!isHidden && items.length > 0) {
+                    selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+                    updateHighlight();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (!isHidden && selectedIndex >= 0 && selectedIndex < items.length) {
+                    const selectedLi = items[selectedIndex];
+                    const ingName = selectedLi.getAttribute('data-ing-name') || '';
+                    selectItem(ingName);
+                } else if (!isHidden && items.length > 0) {
+                    const selectedLi = items[0];
+                    const ingName = selectedLi.getAttribute('data-ing-name') || '';
+                    selectItem(ingName);
+                } else {
+                    listEl.classList.add('hidden');
+                    const amountInput = document.getElementById('ing-amount');
+                    if (amountInput) {
+                        amountInput.focus();
+                        amountInput.select();
+                    }
+                }
+            } else if (e.key === 'Escape') {
+                listEl.classList.add('hidden');
+                selectedIndex = -1;
+            }
+        });
+    }
+
+    // Bind Enter key on Amount, Unit Price, and Tolerance inputs for smooth navigation
+    const amountInput = document.getElementById('ing-amount');
+    if (amountInput && !amountInput.dataset.enterBound) {
+        amountInput.dataset.enterBound = '1';
+        amountInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const priceInput = document.getElementById('ing-unit-price');
+                if (priceInput) {
+                    priceInput.focus();
+                    priceInput.select();
+                }
+            }
+        });
+    }
+
+    const priceInput = document.getElementById('ing-unit-price');
+    if (priceInput && !priceInput.dataset.enterBound) {
+        priceInput.dataset.enterBound = '1';
+        priceInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const form = document.getElementById('form-add-ingredient');
+                if (form) {
+                    if (typeof form.requestSubmit === 'function') {
+                        form.requestSubmit();
+                    } else {
+                        form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                    }
+                }
+            }
+        });
+    }
+
+    const toleranceInput = document.getElementById('ing-tolerance');
+    if (toleranceInput && !toleranceInput.dataset.enterBound) {
+        toleranceInput.dataset.enterBound = '1';
+        toleranceInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const form = document.getElementById('form-add-ingredient');
+                if (form) {
+                    if (typeof form.requestSubmit === 'function') {
+                        form.requestSubmit();
+                    } else {
+                        form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                    }
+                }
+            }
         });
     }
 
@@ -2658,22 +2826,54 @@ function renderRecipesTab() {
             } else {
                 recipes.forEach(r => {
                     const div = document.createElement('div');
-                    div.className = 'recipe-row flex items-center justify-between gap-3';
+                    div.className = 'recipe-card flex flex-col gap-2';
+                    
+                    let updateInfo = '';
+                    if (r.updatedAt && r.updatedBy) {
+                        updateInfo = `<span class="text-xs text-slate-500 ml-auto flex items-center gap-1 shrink-0"><i data-lucide="edit-3" class="w-3 h-3 text-orange-400"></i> Son Değişiklik: <span class="font-bold text-slate-300">${r.updatedBy}</span> (${new Date(r.updatedAt).toLocaleString('tr-TR')})</span>`;
+                    } else if (r.createdAt) {
+                        updateInfo = `<span class="text-xs text-slate-500 ml-auto flex items-center gap-1 shrink-0"><i data-lucide="plus-circle" class="w-3 h-3 text-emerald-400"></i> Oluşturulma: <span class="font-bold text-slate-300">${r.createdBy || 'Sistem'}</span> (${new Date(r.createdAt).toLocaleString('tr-TR')})</span>`;
+                    }
+                        
                     div.innerHTML = `
-                        <div class="flex items-center gap-3 flex-1 min-w-0 cursor-pointer recipe-row-main">
-                            <i data-lucide="folder" class="w-5 h-5 text-orange-500 shrink-0"></i>
-                            <span class="font-bold text-slate-200 text-lg truncate">${r.name}</span>
-                            <span class="text-sm text-slate-400 font-mono shrink-0">${(r.items || []).length} Hammadde</span>
+                        <div class="recipe-row flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-3 flex-1 min-w-0 cursor-pointer recipe-row-main">
+                                <i data-lucide="folder" class="w-5 h-5 text-orange-500 shrink-0"></i>
+                                <span class="font-bold text-slate-200 text-lg truncate">${r.name}</span>
+                                <span class="text-sm text-slate-400 font-mono shrink-0">${(r.items || []).length} Hammadde</span>
+                                ${updateInfo}
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button type="button" class="btn-show-archives px-3 py-1.5 bg-slate-800/80 text-slate-300 border border-slate-700 hover:bg-slate-700 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5">
+                                    <i data-lucide="history" class="w-3.5 h-3.5"></i> Değişiklikleri Göster
+                                </button>
+                                ${canManageRecipes ? `
+                                <button type="button" class="btn-delete-recipe p-2 text-slate-500 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors" data-recipe-id="${r.id}" title="Reçeteyi Pasifleştir">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>` : ''}
+                            </div>
                         </div>
-                        ${canManageRecipes ? `
-                        <button type="button" class="btn-delete-recipe shrink-0 p-2 text-slate-500 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors" data-recipe-id="${r.id}" title="Reçeteyi Pasifleştir">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>` : ''}
+                        <div class="recipe-archives-container hidden w-full p-4 border border-slate-700/50 bg-slate-900/50 rounded-xl mt-2 relative">
+                            <!-- Archives will be loaded here -->
+                        </div>
                     `;
+                    
                     div.querySelector('.recipe-row-main')?.addEventListener('click', () => {
                         state.activeRecipeId = r.id;
                         renderRecipesTab();
                     });
+                    
+                    div.querySelector('.btn-show-archives')?.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const container = div.querySelector('.recipe-archives-container');
+                        if (container.classList.contains('hidden')) {
+                            container.classList.remove('hidden');
+                            loadRecipeArchives(r.id, container);
+                        } else {
+                            container.classList.add('hidden');
+                        }
+                    });
+                    
                     div.querySelector('.btn-delete-recipe')?.addEventListener('click', async (e) => {
                         e.stopPropagation();
                         if (!confirm(`"${r.name}" reçetesini silmek istediğinize emin misiniz?\n\nReçete pasif hale getirilecek ve listeden kaldırılacak. Mevcut siparişler etkilenmez.`)) return;
@@ -2709,7 +2909,7 @@ function renderRecipesTab() {
         const canManageRecipes = state.currentUser.role === 'admin' || !!state.currentUser.canManageRecipes;
         const addIngredientContainer = document.getElementById('add-ingredient-container');
         if (addIngredientContainer) {
-            if (canManageRecipes) {
+            if (canManageRecipes && !state.viewingArchive) {
                 addIngredientContainer.classList.remove('hidden');
                 if (typeof window.populateIngredientOptions === 'function') {
                     window.populateIngredientOptions();
@@ -2733,7 +2933,138 @@ function renderRecipesTab() {
         }
 
         const firm = state.db.firms.find(f => Number(f.id) === Number(state.activeFirmId));
-        const recipe = state.db.recipes.find(r => Number(r.id) === Number(state.activeRecipeId));
+        
+        let recipe;
+        let canManageRecipesLocal = canManageRecipes;
+        
+        const existingBar = dom.recipeLvlIngredients.querySelector('.archive-nav-bar');
+        if (existingBar) existingBar.remove();
+        
+        if (state.viewingArchive && state.archiveList) {
+            canManageRecipesLocal = false; // Salt okunur mod
+            const archive = state.archiveList[state.currentArchiveIndex];
+            recipe = archive.recipeData;
+            
+            let hasRecords = true;
+            if (state.archiveDateFilter) {
+                const currentDateStr = archive.archivedAt ? archive.archivedAt.split('T')[0] : '';
+                if (currentDateStr !== state.archiveDateFilter) {
+                    hasRecords = false;
+                    recipe = { items: [], name: 'Bu tarihte kayıt bulunamadı' };
+                }
+            }
+            
+            const bar = document.createElement('div');
+            bar.className = 'archive-nav-bar flex flex-col md:flex-row justify-between items-center bg-orange-950/40 border border-orange-500/50 p-4 rounded-xl mb-6 gap-4';
+            
+            const isFirst = state.currentArchiveIndex === 0;
+            const isLast = state.currentArchiveIndex === state.archiveList.length - 1;
+            
+            let optionsHtml = '';
+            state.archiveList.forEach((a, idx) => {
+                const dateStr = a.archivedAt ? a.archivedAt.split('T')[0] : '';
+                if (state.archiveDateFilter && dateStr !== state.archiveDateFilter) return;
+                optionsHtml += `<option value="${idx}" ${idx === state.currentArchiveIndex ? 'selected' : ''}>${new Date(a.archivedAt).toLocaleString('tr-TR')} (${a.archivedBy})</option>`;
+            });
+            if (optionsHtml === '') {
+                 optionsHtml = '<option value="" disabled selected>Bu tarihte kayıt yok</option>';
+            }
+            
+            bar.innerHTML = `
+                <div class="flex items-center gap-4 w-full md:w-auto">
+                    <button class="btn-prev-archive p-2 bg-slate-800 hover:bg-slate-700 rounded disabled:opacity-30 disabled:cursor-not-allowed" ${isFirst ? 'disabled' : ''}>
+                        <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                    </button>
+                    <div class="flex flex-col flex-1 text-center min-w-[200px]">
+                        <span class="font-bold text-orange-400">ARŞİV MODU (${state.archiveList.length - state.currentArchiveIndex} / ${state.archiveList.length})</span>
+                        <div class="flex items-center justify-center gap-2 mt-1">
+                            <input type="date" class="archive-date-picker bg-slate-900 border border-slate-700 text-xs rounded px-1 py-0.5 text-slate-300 outline-none cursor-pointer h-7" title="Tarih Filtresi" value="${state.archiveDateFilter || ''}">
+                            <select class="select-archive-date bg-slate-900 border border-slate-700 text-xs rounded px-1 py-0.5 text-slate-300 outline-none w-full max-w-[200px] h-7" ${!hasRecords ? 'disabled' : ''}>
+                                ${optionsHtml}
+                            </select>
+                            ${state.archiveDateFilter ? `<button class="btn-clear-date-picker p-1 h-7 w-7 flex items-center justify-center bg-red-900/40 hover:bg-red-500 rounded text-red-300 hover:text-white transition-colors" title="Filtreyi Temizle"><i data-lucide="x" class="w-4 h-4"></i></button>` : ''}
+                        </div>
+                    </div>
+                    <button class="btn-next-archive p-2 bg-slate-800 hover:bg-slate-700 rounded disabled:opacity-30 disabled:cursor-not-allowed" ${isLast ? 'disabled' : ''}>
+                        <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+                    <button class="btn-exit-archive px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-lg transition-colors border border-slate-700">
+                        Canlı Reçeteye Dön
+                    </button>
+                    <button class="btn-restore-archive px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-bold rounded-lg transition-colors shadow-lg shadow-orange-900/20 flex items-center gap-2">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Bu Reçeteye Dön
+                    </button>
+                </div>
+            `;
+            
+            const card = dom.recipeLvlIngredients.querySelector('.glass-card');
+            card.insertBefore(bar, card.children[1]);
+            
+            bar.querySelector('.btn-prev-archive').addEventListener('click', () => {
+                if(state.currentArchiveIndex > 0) {
+                    state.currentArchiveIndex--;
+                    renderRecipesTab();
+                }
+            });
+            bar.querySelector('.btn-next-archive').addEventListener('click', () => {
+                if(state.currentArchiveIndex < state.archiveList.length - 1) {
+                    state.currentArchiveIndex++;
+                    renderRecipesTab();
+                }
+            });
+            bar.querySelector('.select-archive-date').addEventListener('change', (e) => {
+                state.currentArchiveIndex = parseInt(e.target.value);
+                renderRecipesTab();
+            });
+            bar.querySelector('.archive-date-picker')?.addEventListener('change', (e) => {
+                state.archiveDateFilter = e.target.value;
+                // find first archive matching this date
+                const firstMatch = state.archiveList.findIndex(a => a.archivedAt && a.archivedAt.startsWith(state.archiveDateFilter));
+                if (firstMatch !== -1) {
+                    state.currentArchiveIndex = firstMatch;
+                }
+                renderRecipesTab();
+            });
+            bar.querySelector('.btn-clear-date-picker')?.addEventListener('click', () => {
+                state.archiveDateFilter = null;
+                renderRecipesTab();
+            });
+            bar.querySelector('.btn-exit-archive').addEventListener('click', () => {
+                state.viewingArchive = false;
+                renderRecipesTab();
+            });
+            bar.querySelector('.btn-restore-archive').addEventListener('click', async (e) => {
+                let shouldArchive = false;
+                if (confirm("Mevcut canlı reçetenin üzerine bu arşivi yazmak istediğinize emin misiniz?\n\nDeğişiklikleri uygulamadan önce şu anki (canlı) durumu arşivlemek istiyor musunuz? (Tamam derseniz mevcut durum da yedeklenir)")) {
+                    shouldArchive = true;
+                }
+                const btn = e.currentTarget;
+                const orig = btn.innerHTML;
+                btn.innerHTML = 'Yükleniyor...';
+                btn.disabled = true;
+                try {
+                    if (shouldArchive) {
+                        const currentUser = (typeof state !== 'undefined' && state.currentUser && state.currentUser.name) ? state.currentUser.name : 'Sistem';
+                        await apiPost(`/api/recipes/${state.activeRecipeId}/archive`, { username: currentUser });
+                    }
+                    await apiPost(`/api/recipes/${state.activeRecipeId}/restore/${archive.id}`);
+                    await fetchDb();
+                    state.viewingArchive = false;
+                    renderRecipesTab();
+                    alert('Reçete başarıyla geçmiş sürüme döndürüldü.');
+                } catch(err) {
+                    alert('Hata: ' + err.message);
+                } finally {
+                    btn.innerHTML = orig;
+                    btn.disabled = false;
+                }
+            });
+        } else {
+            recipe = state.db.recipes.find(r => Number(r.id) === Number(state.activeRecipeId));
+        }
 
         // Setup breadcrumbs
         dom.crumbArrowFirm.classList.remove('hidden');
@@ -2747,7 +3078,7 @@ function renderRecipesTab() {
 
         if (!recipe) return;
 
-        renderRecipeIngredientsTable(recipe, canManageRecipes);
+        renderRecipeIngredientsTable(recipe, canManageRecipesLocal);
     }
     lucide.createIcons();
 }
@@ -3779,16 +4110,42 @@ function renderSettingsTab() {
             </div>
             <div class="flex items-center gap-1 shrink-0 ml-4">
                 <div class="w-px h-4 bg-slate-800 mx-1"></div>
+                <button class="btn-edit-item p-1.5 text-slate-500 hover:text-blue-400 hover:bg-blue-950/30 rounded transition-all" title="İsim Değiştir">
+                    <i data-lucide="pencil" class="w-4 h-4"></i>
+                </button>
                 <button class="btn-delete-item p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-950/30 rounded transition-all" title="Sil">
                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                 </button>
             </div>
         `;
 
+            li.querySelector('.btn-edit-item').addEventListener('click', async () => {
+                const newName = prompt(`"${item}" hammaddesinin yeni ismini girin:`, item);
+                if (!newName || newName.trim() === '' || newName.trim() === item) return;
+                
+                const confirmed = confirm(`"${item}" ismini "${newName.trim()}" olarak değiştirmek istediğinize emin misiniz?\\n\\nBu işlem tüm reçetelerdeki kayıtları da anında güncelleyecektir.`);
+                if (!confirmed) return;
+                
+                try {
+                    const res = await apiPut('/api/settings/rename_ingredient', { oldName: item, newName: newName.trim() });
+                    if (res.success) {
+                        // Just fetch db and reload
+                        await fetchDb();
+                        renderSettingsTab();
+                    } else {
+                        alert(res.message || 'Hata oluştu');
+                    }
+                } catch(e) { }
+            });
+
             li.querySelector('.btn-delete-item').addEventListener('click', () => {
                 if (confirm(`"${item}" hammaddesini listeden silmek istediğinize emin misiniz?`)) {
-                    currentOrder.splice(index, 1);
-                    saveRecipeOrderList(currentOrder);
+                    // Read the latest order directly from the DOM to account for any drag-and-drops
+                    const latestOrder = Array.from(dom.settingsIngredientsList.querySelectorAll('.ingredient-name-label')).map(el => el.textContent.trim());
+                    const filteredOrder = latestOrder.filter(n => n !== item);
+                    state.pendingRecipeOrder = filteredOrder;
+                    document.getElementById('settings-recipe-order-actions')?.classList.remove('hidden');
+                    renderIngredientsList(filteredOrder.join('\n'));
                 }
             });
 
@@ -3842,7 +4199,8 @@ function renderSettingsTab() {
                         el.textContent = idx + 1;
                     });
 
-                    saveRecipeOrderList(newOrder);
+                    state.pendingRecipeOrder = newOrder;
+                    document.getElementById('settings-recipe-order-actions')?.classList.remove('hidden');
                 }
             });
         }
@@ -4356,10 +4714,24 @@ document.addEventListener('click', async (e) => {
         const recipeId = state.activeRecipeId;
         if (!recipeId) return;
 
+        let shouldArchive = false;
+        if (confirm("Değişiklikleri arşivlemek istiyor musunuz?\n\n(Eğer 'Tamam' derseniz, reçetenin değişiklik yapılmadan önceki hali veri tabanında yedeklenecektir.)")) {
+            shouldArchive = true;
+        }
+
         const btn = e.target.closest('#btn-save-recipe-edits');
         const originalText = btn.innerHTML;
         btn.innerHTML = '<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Kaydediliyor...';
         btn.disabled = true;
+
+        if (shouldArchive) {
+            try {
+                const currentUser = (typeof state !== 'undefined' && state.currentUser && state.currentUser.name) ? state.currentUser.name : 'Sistem';
+                await apiPost(`/api/recipes/${recipeId}/archive`, { username: currentUser });
+            } catch (err) {
+                console.error("Reçete arşivlenirken hata oluştu:", err);
+            }
+        }
 
         try {
             const edits = window.pendingRecipeEdits;
@@ -4969,3 +5341,236 @@ window.revertAuditLog = async function(logId) {
         alert("Bir hata oluştu!");
     }
 };
+
+
+
+async function loadRecipeArchives(recipeId, container) {
+    container.innerHTML = '<div class="text-center p-2"><i data-lucide="loader" class="w-5 h-5 animate-spin mx-auto text-slate-500"></i></div>';
+    lucide.createIcons({root: container});
+    
+    try {
+        const data = await apiGet(`/api/recipes/${recipeId}/archives`);
+        const archives = data.archives || [];
+        
+        if (archives.length === 0) {
+            container.innerHTML = '<div class="text-slate-500 italic text-sm text-center p-2">Bu reçete için arşiv bulunmamaktadır.</div>';
+            return;
+        }
+        
+        // Save to state for later viewing in Level 3
+        state.archiveList = archives;
+        
+        let listHtml = `
+            <div class="mb-2 flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-lg p-1">
+                <i data-lucide="search" class="w-4 h-4 text-slate-400 ml-1"></i>
+                <input type="date" class="archive-date-filter bg-transparent text-slate-300 text-xs outline-none w-full cursor-pointer p-1" title="Tarihe göre filtrele">
+                <button class="btn-clear-date-filter hidden p-1 h-6 w-6 flex items-center justify-center bg-red-900/40 hover:bg-red-500 rounded text-red-300 hover:text-white transition-colors" title="Filtreyi Temizle"><i data-lucide="x" class="w-3 h-3"></i></button>
+            </div>
+            <div class="archive-list-empty hidden text-center p-3 text-slate-500 italic text-xs border border-slate-700/50 rounded-lg bg-slate-800/30">Seçilen tarihte kayıt bulunamadı.</div>
+            <ul class="archive-list flex flex-col gap-1 text-sm max-h-60 overflow-y-auto pr-1">
+        `;
+        archives.forEach((archive, idx) => {
+            const dateStr = archive.archivedAt ? archive.archivedAt.split('T')[0] : '';
+            listHtml += `
+                <li class="archive-list-item flex items-center justify-between p-2 hover:bg-slate-800 rounded cursor-pointer transition-colors" data-idx="${idx}" data-date="${dateStr}">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="file-clock" class="w-4 h-4 text-orange-500"></i>
+                        <span class="text-slate-300 font-medium">${new Date(archive.archivedAt).toLocaleString('tr-TR')}</span>
+                    </div>
+                    <span class="text-slate-500 text-xs">${archive.archivedBy}</span>
+                </li>
+            `;
+        });
+        listHtml += '</ul>';
+        
+        container.innerHTML = listHtml;
+        lucide.createIcons({root: container});
+        
+        container.querySelectorAll('.archive-list-item').forEach(el => {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = parseInt(el.getAttribute('data-idx'));
+                state.viewingArchive = true;
+                state.currentArchiveIndex = idx;
+                state.activeRecipeId = recipeId;
+                renderRecipesTab();
+            });
+        });
+        const dateInput = container.querySelector('.archive-date-filter');
+        const clearBtn = container.querySelector('.btn-clear-date-filter');
+        const listItems = container.querySelectorAll('.archive-list-item');
+        
+        dateInput?.addEventListener('change', (e) => {
+            e.stopPropagation();
+            const filterDate = e.target.value;
+            if (filterDate) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+            
+            let visibleCount = 0;
+            listItems.forEach(li => {
+                if (!filterDate || li.getAttribute('data-date') === filterDate) {
+                    li.classList.remove('hidden');
+                    li.classList.add('flex');
+                    visibleCount++;
+                } else {
+                    li.classList.add('hidden');
+                    li.classList.remove('flex');
+                }
+            });
+            const emptyMsg = container.querySelector('.archive-list-empty');
+            if (emptyMsg) {
+                if (visibleCount === 0) emptyMsg.classList.remove('hidden');
+                else emptyMsg.classList.add('hidden');
+            }
+        });
+        
+        clearBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dateInput.value = '';
+            dateInput.dispatchEvent(new Event('change'));
+        });
+        
+    } catch (err) {
+        console.error('Arşiv yükleme hatası:', err);
+        container.innerHTML = '<div class="text-red-400 text-sm text-center p-2">Arşivler yüklenirken hata oluştu.</div>';
+    }
+}
+
+// ----------------- Recipe Order Apply Logic -----------------
+document.addEventListener('DOMContentLoaded', () => {
+    const btnSaveRecipeOrder = document.getElementById('btn-save-recipe-order');
+    const btnCancelRecipeOrder = document.getElementById('btn-cancel-recipe-order');
+    const modalApplyOrder = document.getElementById('modal-apply-order-overlay');
+    const btnCloseModal = document.getElementById('btn-close-apply-order-modal');
+    const btnCancelModal = document.getElementById('btn-cancel-apply-order');
+    const btnConfirmModal = document.getElementById('btn-confirm-apply-order');
+    
+    if (btnCancelRecipeOrder) {
+        btnCancelRecipeOrder.addEventListener('click', async () => {
+            document.getElementById('settings-recipe-order-actions')?.classList.add('hidden');
+            await fetchDb();
+            renderSettingsTab();
+        });
+    }
+
+    if (btnSaveRecipeOrder) {
+        btnSaveRecipeOrder.addEventListener('click', () => {
+            modalApplyOrder.classList.remove('hidden');
+            // reset radios
+            const radios = document.querySelectorAll('input[name="apply_mode"]');
+            radios.forEach(r => {
+                r.checked = (r.value === 'none');
+            });
+            document.getElementById('apply-mode-inputs').classList.add('hidden');
+            document.getElementById('input-date-range').classList.add('hidden');
+            document.getElementById('input-single-date').classList.add('hidden');
+            document.getElementById('input-specific-selection').classList.add('hidden');
+            
+            // populate recipe list
+            const recipeList = document.getElementById('apply-recipe-list');
+            if (recipeList) {
+                recipeList.innerHTML = '';
+                (state.db.recipes || []).forEach(r => {
+                    const div = document.createElement('label');
+                    div.className = 'flex items-center gap-2 p-1.5 hover:bg-slate-800 rounded cursor-pointer transition-colors border border-transparent hover:border-slate-700';
+                    div.innerHTML = `
+                        <input type="checkbox" value="${r.id}" class="recipe-checkbox w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 rounded">
+                        <span class="text-sm text-slate-200 truncate flex-1">${r.name}</span>
+                        <span class="text-[10px] text-slate-500 font-mono">${(r.items || []).length} Hmd</span>
+                    `;
+                    recipeList.appendChild(div);
+                });
+            }
+        });
+    }
+
+    const closeApplyModal = () => modalApplyOrder.classList.add('hidden');
+    btnCloseModal?.addEventListener('click', closeApplyModal);
+    btnCancelModal?.addEventListener('click', closeApplyModal);
+    
+    // Mode toggle logic
+    document.querySelectorAll('input[name="apply_mode"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const mode = e.target.value;
+            const container = document.getElementById('apply-mode-inputs');
+            const dRange = document.getElementById('input-date-range');
+            const sDate = document.getElementById('input-single-date');
+            const sSel = document.getElementById('input-specific-selection');
+            
+            dRange.classList.add('hidden');
+            sDate.classList.add('hidden');
+            sSel.classList.add('hidden');
+            
+            if (mode === 'none' || mode === 'all') {
+                container.classList.add('hidden');
+            } else {
+                container.classList.remove('hidden');
+                if (mode === 'date_range') dRange.classList.remove('hidden');
+                if (mode === 'before_date' || mode === 'after_date') sDate.classList.remove('hidden');
+                if (mode === 'include_specific' || mode === 'exclude_specific') sSel.classList.remove('hidden');
+            }
+        });
+    });
+    
+    // Select All / Deselect All
+    document.getElementById('btn-select-all-recipes')?.addEventListener('click', () => {
+        document.querySelectorAll('.recipe-checkbox').forEach(cb => {
+            if (cb.parentElement.style.display !== 'none') cb.checked = true;
+        });
+    });
+    document.getElementById('btn-deselect-all-recipes')?.addEventListener('click', () => {
+        document.querySelectorAll('.recipe-checkbox').forEach(cb => {
+            if (cb.parentElement.style.display !== 'none') cb.checked = false;
+        });
+    });
+    
+    // Recipe Search
+    document.getElementById('apply-recipe-search')?.addEventListener('input', (e) => {
+        const val = e.target.value.toLowerCase();
+        document.querySelectorAll('.recipe-checkbox').forEach(cb => {
+            const label = cb.nextElementSibling.textContent.toLowerCase();
+            cb.parentElement.style.display = label.includes(val) ? 'flex' : 'none';
+        });
+    });
+    
+    // Confirm Action
+    btnConfirmModal?.addEventListener('click', async () => {
+        const mode = document.querySelector('input[name="apply_mode"]:checked').value;
+        const payload = {
+            new_order: state.pendingRecipeOrder || [],
+            mode: mode,
+            params: {}
+        };
+        
+        if (mode === 'date_range') {
+            payload.params.start_date = document.getElementById('apply-start-date').value;
+            payload.params.end_date = document.getElementById('apply-end-date').value;
+            if (!payload.params.start_date || !payload.params.end_date) return alert('Lütfen tarih aralığını tam seçiniz.');
+        } else if (mode === 'before_date' || mode === 'after_date') {
+            payload.params.date = document.getElementById('apply-single-date').value;
+            if (!payload.params.date) return alert('Lütfen referans tarihini seçiniz.');
+        } else if (mode === 'include_specific' || mode === 'exclude_specific') {
+            const selected = Array.from(document.querySelectorAll('.recipe-checkbox:checked')).map(cb => parseInt(cb.value));
+            if (selected.length === 0 && mode === 'include_specific') return alert('Lütfen en az bir reçete seçiniz.');
+            payload.params.selected_recipe_ids = selected;
+        }
+        
+        // Ask for archiving
+        const shouldArchive = confirm('Değişiklik uygulanacak reçetelerin önceki halleri arşivlensin mi?\n\n"Tamam" derseniz değişiklikten önce otomatik yedek alınır.');
+        payload.archive = shouldArchive;
+        
+        const res = await apiPost('/api/settings/apply_recipe_order', payload);
+        if (res && res.success) {
+            closeApplyModal();
+            document.getElementById('settings-recipe-order-actions')?.classList.add('hidden');
+            await fetchDb();
+            renderSettingsTab();
+            alert('Sıralama başarıyla uygulandı ve kaydedildi.');
+        } else {
+            alert(res?.error || 'Uygulama sırasında bir hata oluştu.');
+        }
+    });
+});

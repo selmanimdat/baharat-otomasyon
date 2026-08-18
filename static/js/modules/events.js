@@ -92,6 +92,16 @@ function bindEvents() {
     document.getElementById('tab-accounting')?.addEventListener('click', () => { state.adminTab = 'accounting'; renderAdminPanel(); });
     document.getElementById('tab-settings')?.addEventListener('click', () => { state.adminTab = 'settings'; renderAdminPanel(); });
     document.getElementById('tab-audit-logs')?.addEventListener('click', () => { state.adminTab = 'audit-logs'; renderAdminPanel(); });
+    
+    document.getElementById('tab-switch-operator')?.addEventListener('click', () => {
+        state.view = 'operator';
+        updateUI();
+    });
+
+    document.getElementById('btn-return-to-admin')?.addEventListener('click', () => {
+        state.view = 'admin';
+        updateUI();
+    });
 
     // Customer Modal Handlers
     document.getElementById('btn-add-customer')?.addEventListener('click', () => openCustomerModal());
@@ -161,9 +171,13 @@ function bindEvents() {
             if (!newName) return;
 
             let currentOrder = [];
-            const settingObj = (state.db.settings || []).find(s => s.key === 'recipe_order');
-            if (settingObj && settingObj.value) {
-                currentOrder = settingObj.value.split('\n').map(s => s.trim()).filter(Boolean);
+            if (state.pendingRecipeOrder && state.pendingRecipeOrder.length > 0) {
+                currentOrder = [...state.pendingRecipeOrder];
+            } else {
+                const settingObj = (state.db.settings || []).find(s => s.key === 'recipe_order');
+                if (settingObj && settingObj.value) {
+                    currentOrder = settingObj.value.split('\n').map(s => s.trim()).filter(Boolean);
+                }
             }
             
             if (currentOrder.includes(newName)) {
@@ -172,17 +186,59 @@ function bindEvents() {
             }
 
             currentOrder.push(newName);
+            input.value = '';
+            state.pendingRecipeOrder = currentOrder;
+            document.getElementById('settings-recipe-order-actions')?.classList.remove('hidden');
+            if (typeof renderIngredientsList === 'function') {
+                // Not accessible directly here because renderIngredientsList is scoped in admin.js
+                // So we'll just set the state and re-render the whole settings tab, but we need a way
+                // to not lose the pending state!
+                // Ah, renderSettingsTab fetches from state.db.settings by default.
+                // We must update state.db.settings temporarily or render manually.
+            }
+            // For now, let's just temporarily update state.db.settings so renderSettingsTab uses it
+            const existing = (state.db.settings || []).find(s => s.key === 'recipe_order');
+            if (existing) existing.value = currentOrder.join('\n');
+            else state.db.settings.push({ key: 'recipe_order', value: currentOrder.join('\n') });
             
-            try {
-                const res = await apiPost('/api/settings', { key: 'recipe_order', value: currentOrder.join('\n') });
-                if (res.success) {
-                    input.value = '';
-                    await fetchDb();
-                    if (typeof renderSettingsTab === 'function') renderSettingsTab();
-                }
-            } catch(e) { }
+            if (typeof renderSettingsTab === 'function') renderSettingsTab();
+            setTimeout(() => {
+                document.getElementById('settings-recipe-order-actions')?.classList.remove('hidden');
+            }, 50);
         });
     }
+
+    // Check Ingredient Logic
+    document.getElementById('input-check-ingredient')?.addEventListener('input', (e) => {
+        const val = e.target.value.toLowerCase().trim();
+        const resultsContainer = document.getElementById('check-ingredient-results');
+        if (!resultsContainer) return;
+        
+        if (val.length < 2) {
+            resultsContainer.innerHTML = '<span class="text-slate-500 italic text-xs">Yazmaya başlayın... (en az 2 harf)</span>';
+            return;
+        }
+
+        let currentOrder = [];
+        if (state.pendingRecipeOrder && state.pendingRecipeOrder.length > 0) {
+            currentOrder = [...state.pendingRecipeOrder];
+        } else {
+            const settingObj = (state.db.settings || []).find(s => s.key === 'recipe_order');
+            if (settingObj && settingObj.value) {
+                currentOrder = settingObj.value.split('\n').map(s => s.trim()).filter(Boolean);
+            }
+        }
+        
+        const matches = currentOrder.filter(item => item.toLowerCase().includes(val));
+        
+        if (matches.length === 0) {
+            resultsContainer.innerHTML = '<span class="text-emerald-500 font-bold text-xs"><i data-lucide="check-circle" class="w-3 h-3 inline"></i> Bu ürün listede yok. Eklenebilir.</span>';
+        } else {
+            const matchHtml = matches.map(m => `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded text-xs">${m}</span>`).join(' ');
+            resultsContainer.innerHTML = `<div class="flex flex-wrap gap-2">${matchHtml}</div>`;
+        }
+        lucide.createIcons();
+    });
 
     // Order Creation Form dropdown logic
     dom.orderFirmSelect?.addEventListener('change', (e) => {
@@ -191,6 +247,36 @@ function bindEvents() {
     });
 
     dom.orderRecipeSelect?.addEventListener('change', () => {
+        if (state.orderSelectedFirmId) {
+            const setting = (state.db.settings || []).find(s => s.key === 'firm_mixer_capacities');
+            if (setting && setting.value) {
+                try {
+                    const data = JSON.parse(setting.value);
+                    const capacities = data[String(state.orderSelectedFirmId)] || [];
+                    if (capacities.length > 1) {
+                        window.orderSegments = capacities.map((cap, i) => ({
+                            id: Date.now() + i,
+                            amount: 0,
+                            bagWeight: cap
+                        }));
+                        const input = document.getElementById('order-bag-weight');
+                        if (input) input.value = '';
+                        if (typeof window.renderOrderSegments === 'function') window.renderOrderSegments();
+                    } else if (capacities.length === 1) {
+                        const input = document.getElementById('order-bag-weight');
+                        if (input) input.value = capacities[0];
+                        window.orderSegments = [];
+                        if (typeof window.renderOrderSegments === 'function') window.renderOrderSegments();
+                    } else {
+                        window.orderSegments = [];
+                        if (typeof window.renderOrderSegments === 'function') window.renderOrderSegments();
+                    }
+                } catch(e) {}
+            } else {
+                window.orderSegments = [];
+                if (typeof window.renderOrderSegments === 'function') window.renderOrderSegments();
+            }
+        }
         if (typeof updateOrderFormSummary === 'function') updateOrderFormSummary();
     });
     document.getElementById('order-amount')?.addEventListener('input', () => {
@@ -215,12 +301,22 @@ function bindEvents() {
     dom.formCreateOrder?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const fd = new FormData(dom.formCreateOrder);
+        let bagWeightVal = fd.get('bagWeight');
+        if ((!bagWeightVal || !parseFloat(bagWeightVal)) && window.orderSegments && window.orderSegments.length > 0) {
+            const firstSeg = window.orderSegments.find(s => s.bagWeight && parseFloat(s.bagWeight) > 0);
+            if (firstSeg) {
+                bagWeightVal = firstSeg.bagWeight;
+            } else {
+                bagWeightVal = 250;
+            }
+        }
+
         const data = {
             firmId: fd.get('firmId'),
             recipeId: fd.get('recipeId'),
             totalAmount: fd.get('amount'),
             batches: fd.get('batches'),
-            bagWeight: fd.get('bagWeight'),
+            bagWeight: bagWeightVal,
             deliveryDate: fd.get('deliveryDate') || getTodayDateStr(),
             urgency: fd.get('urgency') || 'normal',
             notes: fd.get('notes') || ''
@@ -236,6 +332,39 @@ function bindEvents() {
 
         try {
             await apiPost('/api/orders', data);
+            
+            // Auto save capacity to settings (Overwrite with the capacities actually used in this order)
+            if (data.firmId) {
+                let uniqueCapacities = [];
+                if (data.bagWeight) {
+                    const cap = Number(data.bagWeight);
+                    if (!isNaN(cap) && cap > 0) uniqueCapacities.push(cap);
+                }
+                if (data.segments && data.segments.length > 0) {
+                    data.segments.forEach(seg => {
+                        const cap = Number(seg.bagWeight);
+                        if (!isNaN(cap) && cap > 0 && !uniqueCapacities.includes(cap)) {
+                            uniqueCapacities.push(cap);
+                        }
+                    });
+                }
+
+                const setting = (state.db.settings || []).find(s => s.key === 'firm_mixer_capacities');
+                let capData = {};
+                if (setting && setting.value) {
+                    try { capData = JSON.parse(setting.value); } catch(e) {}
+                }
+                const fKey = String(data.firmId);
+                
+                // Overwrite the capacities for this firm
+                capData[fKey] = uniqueCapacities;
+                
+                await apiPost('/api/settings', {
+                    key: 'firm_mixer_capacities',
+                    value: JSON.stringify(capData)
+                });
+            }
+
             alert('Sipariş başarıyla oluşturuldu ve partilere bölündü.');
             dom.formCreateOrder.reset();
             window.orderSegments = [];
@@ -273,6 +402,9 @@ function bindEvents() {
     document.querySelectorAll('.btn-back-to-recipes').forEach(btn => {
         btn?.addEventListener('click', () => {
             state.activeRecipeId = null;
+            state.viewingArchive = false;
+            state.currentArchiveIndex = 0;
+            state.archiveList = [];
             renderRecipesTab();
         });
     });
@@ -302,10 +434,14 @@ function bindEvents() {
     });
 
     // Add Ingredient
+    let isAddingIngredientToRecipe = false;
     dom.formAddIngredient?.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (isAddingIngredientToRecipe) return;
+
         const fd = new FormData(dom.formAddIngredient);
-        const name = fd.get('name').trim();
+        const name = (fd.get('name') || '').trim();
+        if (!name) return;
         
         // Validate against settings list
         let allowed = [];
@@ -318,17 +454,64 @@ function bindEvents() {
             return;
         }
 
+        // Check if ingredient already exists in active recipe
+        const activeRecipe = (state.db.recipes || []).find(r => Number(r.id) === Number(state.activeRecipeId));
+        if (activeRecipe && activeRecipe.items) {
+            const alreadyExists = activeRecipe.items.some(item => (item.name || '').trim().toLowerCase() === name.toLowerCase());
+            if (alreadyExists) {
+                alert(`"${name}" hammaddesi bu reçetede zaten ekli! Aynı ürünü tekrar ekleyemezsiniz.`);
+                return;
+            }
+        }
+
+        const amountVal = parseFloat(fd.get('amount'));
+        const toleranceVal = parseFloat(fd.get('tolerance'));
+        if (isNaN(amountVal)) {
+            alert('Lütfen geçerli bir miktar giriniz.');
+            return;
+        }
+
+        const unitPriceRaw = fd.get('unit_price');
+        const unitPrice = unitPriceRaw && unitPriceRaw.trim() !== '' ? parseFloat(unitPriceRaw) : null;
+
         const data = {
             name: name,
-            amount: parseFloat(fd.get('amount')),
-            tolerance: parseFloat(fd.get('tolerance'))
+            amount: amountVal,
+            tolerance: isNaN(toleranceVal) ? 1.0 : toleranceVal,
+            unit_price: unitPrice
         };
+
+        isAddingIngredientToRecipe = true;
+        const submitBtn = dom.formAddIngredient.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = true;
+
         try {
             await apiPost(`/api/recipes/${state.activeRecipeId}/items`, data);
             dom.formAddIngredient.reset();
+            const listEl = document.getElementById('ingredient-autocomplete-list');
+            if (listEl) listEl.classList.add('hidden');
             await fetchDb();
             renderRecipesTab();
-        } catch(e) {}
+
+            // Auto-scroll DOWN and focus for rapid sequential adding
+            setTimeout(() => {
+                const addContainer = document.getElementById('add-ingredient-container');
+                if (addContainer) {
+                    addContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                }
+                const ingNameInput = document.getElementById('ing-name');
+                if (ingNameInput) {
+                    ingNameInput.focus({ preventScroll: true });
+                }
+            }, 150);
+        } catch(e) {
+            console.error(e);
+        } finally {
+            isAddingIngredientToRecipe = false;
+            if (submitBtn) submitBtn.disabled = false;
+        }
     });
 
     // Add User

@@ -161,17 +161,17 @@ function renderOperatorPanel() {
                     let dateBadge = b.deliveryDate ? `<span class="px-2 py-0.5 bg-slate-800 text-slate-300 rounded font-mono text-[10px]"><i data-lucide="calendar" class="w-3 h-3 inline pb-0.5"></i> ${b.deliveryDate}</span>` : '';
 
                     newHtml += `
-                    <div id="pending-job-${b.batchId}" class="pending-job-card glass-card p-5 border ${borderColor} rounded-2xl flex justify-between items-center gap-4 transition-all hover:bg-slate-800/30">
-                        <div class="flex-1 min-w-0">
+                    <div id="pending-job-${b.batchId}" class="pending-job-card glass-card p-4 sm:p-5 border ${borderColor} rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 transition-all hover:bg-slate-800/30">
+                        <div class="flex-1 min-w-0 w-full">
                             <div class="flex items-center gap-2 mb-1 flex-wrap">
-                                <div class="text-orange-400 font-extrabold text-xl truncate">${b.customer}</div>
+                                <div class="text-orange-400 font-extrabold text-base sm:text-xl break-words leading-snug">${b.customer}</div>
                                 ${urgencyBadge}
                                 ${dateBadge}
                             </div>
-                            <div class="text-slate-200 text-lg mt-0.5 truncate">${b.recipeName} - <span class="text-orange-300">${b.targetAmount.toFixed(2)} kg</span></div>
-                            <div class="text-xs text-slate-500 mt-1 font-mono">Parti No: ${b.no} / ${b.totalBatches} ${statusBadgeHtml}</div>
+                            <div class="text-slate-200 font-bold text-sm sm:text-lg mt-1 break-words leading-snug">${b.recipeName} - <span class="text-orange-300 font-extrabold">${b.targetAmount.toFixed(2)} kg</span></div>
+                            <div class="text-xs text-slate-500 mt-1.5 font-mono">Parti No: ${b.no} / ${b.totalBatches} ${statusBadgeHtml}</div>
                         </div>
-                        <button class="btn ${btnClass} py-3.5 px-6 font-bold flex items-center gap-2 text-lg rounded-xl btn-action-job shrink-0" data-batch-id="${b.batchId}">
+                        <button class="btn ${btnClass} w-full sm:w-auto py-3 sm:py-3.5 px-5 sm:px-6 font-bold flex items-center justify-center gap-2 text-base sm:text-lg rounded-xl btn-action-job shrink-0" data-batch-id="${b.batchId}">
                             <i data-lucide="${btnIcon}" class="w-5 h-5"></i> ${btnText}
                         </button>
                     </div>
@@ -184,10 +184,26 @@ function renderOperatorPanel() {
             // Attach event listeners
             document.querySelectorAll('.btn-action-job').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
-                    const bId = e.currentTarget.getAttribute('data-batch-id');
+                    const btnEl = e.currentTarget;
+                    btnEl.disabled = true;
+                    const originalHtml = btnEl.innerHTML;
+                    btnEl.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> BEKLEYİN...';
+                    lucide.createIcons();
+                    
+                    const bId = btnEl.getAttribute('data-batch-id');
                     const b = pendingBatches.find(x => x.batchId === bId);
                     if (b) {
-                        await joinJob(b.orderId, b.batchId);
+                        if (['beklemede', 'Bekliyor'].includes(b.status)) {
+                            await startJob(b.orderId, b.batchId);
+                        } else {
+                            await joinJob(b.orderId, b.batchId);
+                        }
+                    }
+                    
+                    if (btnEl) {
+                        btnEl.disabled = false;
+                        btnEl.innerHTML = originalHtml;
+                        lucide.createIcons();
                     }
                 });
             });
@@ -224,7 +240,9 @@ async function startJob(orderId, batchId) {
 }
 
 async function joinJob(orderId, batchId) {
-    await fetchDb();
+    // Avoid blocking the UI with a full DB fetch when joining an already running job
+    // await fetchDb(); 
+    
     const order = state.db.orders.find(o => o.id === orderId);
     const batch = order ? order.batches.find(b => b.id === batchId) : null;
 
@@ -943,9 +961,9 @@ function renderWeighingScreen() {
         dom.operatorChecklistContainer.appendChild(itemContainer);
     });
 
-    // Remove old items that no longer exist
+    // Remove old items that no longer exist (and also clear any innerHTML injected warnings that lack IDs)
     Array.from(dom.operatorChecklistContainer.children).forEach(child => {
-        if (child.id && !expectedIds.has(child.id)) {
+        if (!child.id || !expectedIds.has(child.id)) {
             child.remove();
         }
     });

@@ -353,6 +353,9 @@ def add_recipe_item(recipe_id):
         is_separate=is_separate
     )
     db.session.add(new_item)
+    from backend.utils import get_authenticated_user
+    cu = get_authenticated_user()
+    recipe.updated_by = cu.name if cu else 'Sistem'
     db.session.commit()
     return jsonify({'success': True, 'recipe': recipe.to_dict()})
 
@@ -383,6 +386,9 @@ def delete_recipe_item(recipe_id, item_id):
     )
     db.session.add(log_entry)
     
+    from backend.utils import get_authenticated_user
+    cu = get_authenticated_user()
+    recipe.updated_by = cu.name if cu else 'Sistem'
     db.session.commit()
     return jsonify({'success': True, 'recipe': recipe.to_dict()})
 
@@ -465,9 +471,90 @@ def update_recipe_item(recipe_id, item_id):
             description=f"{log_action} [{log_details}]"
         )
         db.session.add(audit_log)
+    recipe.updated_by = username
 
+    from backend.utils import get_authenticated_user
+    cu = get_authenticated_user()
+    recipe.updated_by = cu.name if cu else 'Sistem'
     db.session.commit()
     return jsonify({'success': True, 'recipe': recipe.to_dict()})
+
+@admin_bp.route('/recipes/<int:recipe_id>/archive', methods=['POST'])
+@require_permission('can_manage_recipes')
+def archive_recipe(recipe_id):
+    recipe = Recipe.query.get_or_404(recipe_id)
+    data = request.json or {}
+    
+    from backend.utils import get_authenticated_user
+    current_user = get_authenticated_user()
+    archived_by = data.get('username', current_user.name if current_user else 'Bilinmeyen Kullanıcı')
+    
+    import json
+    from backend.models import RecipeArchive
+    
+    archive = RecipeArchive(
+        recipe_id=recipe.id,
+        recipe_name=recipe.name,
+        archived_by=archived_by,
+        recipe_data=json.dumps(recipe.to_dict())
+    )
+    db.session.add(archive)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Reçete arşivlendi'})
+
+
+@admin_bp.route('/recipes/<int:recipe_id>/archives', methods=['GET'])
+@require_permission('can_manage_recipes')
+def get_recipe_archives(recipe_id):
+    from backend.models import RecipeArchive
+    archives = RecipeArchive.query.filter_by(recipe_id=recipe_id).order_by(RecipeArchive.archived_at.desc()).all()
+    return jsonify({'success': True, 'archives': [a.to_dict() for a in archives]})
+
+@admin_bp.route('/recipes/<int:recipe_id>/restore/<int:archive_id>', methods=['POST'])
+@require_permission('can_manage_recipes')
+def restore_recipe(recipe_id, archive_id):
+    recipe = Recipe.query.get_or_404(recipe_id)
+    from backend.models import RecipeArchive, RecipeItem
+    archive = RecipeArchive.query.get_or_404(archive_id)
+    
+    if archive.recipe_id != recipe.id:
+        return jsonify({'success': False, 'message': 'Bu arşiv bu reçeteye ait değil!'}), 400
+        
+    import json
+    data = json.loads(archive.recipe_data)
+    
+    # 1. Update basic recipe fields
+    recipe.base_amount = data.get('baseAmount', recipe.base_amount)
+    recipe.price_per_kg = data.get('pricePerKg', recipe.price_per_kg)
+    recipe.hide_separate_colors = data.get('hideSeparateColors', recipe.hide_separate_colors)
+    recipe.is_custom_kg_based = data.get('isCustomKgBased', getattr(recipe, 'is_custom_kg_based', False))
+    from backend.utils import get_authenticated_user
+    current_user = get_authenticated_user()
+    recipe.updated_by = current_user.name if current_user else 'Sistem'
+    
+    # 2. Delete existing items
+    for item in recipe.items:
+        db.session.delete(item)
+        
+    # 3. Create new items from archive
+    items = data.get('items', [])
+    for idx, item_data in enumerate(items):
+        new_item = RecipeItem(
+            recipe_id=recipe.id,
+            name=item_data.get('name'),
+            amount=item_data.get('amount', 0),
+            tolerance=item_data.get('tolerance', 0),
+            sort_order=item_data.get('sort_order', idx),
+            unit_price=item_data.get('unit_price', 0),
+            is_separate=item_data.get('is_separate', False),
+            is_not_included=item_data.get('is_not_included', False)
+        )
+        db.session.add(new_item)
+        
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Reçete arşivden geri yüklendi', 'recipe': recipe.to_dict()})
 
 @admin_bp.route('/recipes/<int:recipe_id>/items/reorder', methods=['PUT'])
 @require_permission('can_manage_recipes')
@@ -485,6 +572,9 @@ def reorder_recipe_items(recipe_id):
         if item:
             item.sort_order = index
             
+    from backend.utils import get_authenticated_user
+    cu = get_authenticated_user()
+    recipe.updated_by = cu.name if cu else 'Sistem'
     db.session.commit()
     return jsonify({'success': True, 'recipe': recipe.to_dict()})
 
@@ -523,6 +613,17 @@ def create_order():
     urgency = data.get('urgency') or 'normal'
 
     
+    if not bag_weight and segments and len(segments) > 0:
+        for seg in segments:
+            if seg.get('bagWeight'):
+                try:
+                    bag_weight = float(seg.get('bagWeight'))
+                    break
+                except (ValueError, TypeError):
+                    pass
+        if not bag_weight:
+            bag_weight = 250.0
+
     if not firm_id or not recipe_id or not total_amount or not bag_weight:
         return jsonify({'success': False, 'message': 'Eksik bilgi!'}), 400
         
@@ -1064,3 +1165,99 @@ def revert_audit_log(log_id):
     db.session.commit()
     
     return jsonify({'success': True, 'message': 'İşlem başarıyla geri alındı.'})
+
+@admin_bp.route('/settings/apply_recipe_order', methods=['POST'])
+@require_permission('can_manage_settings')
+def apply_recipe_order():
+    from backend.models import Setting, Recipe, RecipeArchive, db
+    from backend.utils import get_authenticated_user
+    import json
+    from datetime import datetime
+    
+    data = request.json or {}
+    new_order = data.get('new_order', [])
+    mode = data.get('mode', 'none')
+    params = data.get('params', {})
+    archive_flag = data.get('archive', False)
+    
+    current_user = get_authenticated_user()
+    action_by = current_user.name if current_user else 'Sistem'
+    
+    # 1. Save global setting first
+    setting = Setting.query.filter_by(key='recipe_order').first()
+    new_value = '\n'.join(new_order)
+    if setting:
+        setting.value = new_value
+    else:
+        setting = Setting(key='recipe_order', value=new_value)
+        db.session.add(setting)
+    
+    if mode == 'none':
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Sadece ayar kaydedildi.'})
+        
+    # 2. Filter recipes
+    query = Recipe.query.filter_by(is_active=True)
+    if mode == 'all':
+        pass # query all
+    elif mode == 'date_range':
+        start = params.get('start_date')
+        end = params.get('end_date')
+        if start and end:
+            start_dt = datetime.strptime(start, '%Y-%m-%d')
+            end_dt = datetime.strptime(end, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+            query = query.filter(db.or_(
+                Recipe.updated_at.between(start_dt, end_dt),
+                db.and_(Recipe.updated_at == None, Recipe.created_at.between(start_dt, end_dt))
+            ))
+    elif mode == 'before_date':
+        date_str = params.get('date')
+        if date_str:
+            dt = datetime.strptime(date_str, '%Y-%m-%d')
+            query = query.filter(db.or_(
+                Recipe.updated_at < dt,
+                db.and_(Recipe.updated_at == None, Recipe.created_at < dt)
+            ))
+    elif mode == 'after_date':
+        date_str = params.get('date')
+        if date_str:
+            dt = datetime.strptime(date_str, '%Y-%m-%d')
+            query = query.filter(db.or_(
+                Recipe.updated_at > dt,
+                db.and_(Recipe.updated_at == None, Recipe.created_at > dt)
+            ))
+    elif mode == 'include_specific':
+        ids = params.get('selected_recipe_ids', [])
+        query = query.filter(Recipe.id.in_(ids))
+    elif mode == 'exclude_specific':
+        ids = params.get('selected_recipe_ids', [])
+        query = query.filter(~Recipe.id.in_(ids))
+        
+    recipes = query.all()
+    
+    # 3. Apply changes and archive if needed
+    for recipe in recipes:
+        if archive_flag:
+            archive = RecipeArchive(
+                recipe_id=recipe.id,
+                recipe_name=recipe.name,
+                archived_by=action_by,
+                recipe_data=json.dumps(recipe.to_dict())
+            )
+            db.session.add(archive)
+            
+        # Re-sort recipe items
+        items = recipe.items
+        for item in items:
+            try:
+                idx = new_order.index(item.ingredient_name)
+                item.sort_order = idx
+            except ValueError:
+                # Not in new order, put at the end
+                item.sort_order = len(new_order) + items.index(item)
+                
+        recipe.updated_at = datetime.utcnow()
+        recipe.updated_by = action_by
+        
+    db.session.commit()
+    return jsonify({'success': True, 'message': f'{len(recipes)} reçete güncellendi.'})

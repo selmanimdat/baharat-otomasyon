@@ -284,7 +284,7 @@
                                 class="block text-xs font-bold text-slate-400 uppercase mb-2">Varsayılan Mikser
                                 Kapasitesi (kg)</label>
                             <input type="number" step="0.1" min="0.1" id="order-bag-weight" name="bagWeight"
-                                placeholder="Örn: 250" required class="input-field">
+                                placeholder="Örn: 250" class="input-field">
                         </div>
                         <div id="container-order-segments" class="md:col-span-2">
                             <div class="flex items-center justify-between mb-2">
@@ -1433,6 +1433,10 @@
                                 <!-- Dynamic list items will be generated here -->
                             </ul>
                         </div>
+                        <div id="settings-recipe-order-actions" class="hidden flex justify-end gap-3 mt-4 pt-4 border-t border-slate-800/60">
+                            <button type="button" id="btn-cancel-recipe-order" class="btn btn-slate py-2 px-5 text-sm font-bold">İptal Et</button>
+                            <button type="button" id="btn-save-recipe-order" class="btn btn-orange py-2 px-6 text-sm font-bold shadow-lg shadow-orange-900/20">Değişiklikleri Kaydet</button>
+                        </div>
 
                         <div class="mt-8 border-t border-slate-800/60 pt-6">
                             <h4
@@ -1736,6 +1740,10 @@
 <!-- Floating Save Buttons for Global Prices -->
 <div id="container-floating-save-prices"
     class="fixed bottom-6 right-6 z-50 flex items-center gap-3 transition-all transform hover:scale-105 hidden">
+    <button type="button" id="btn-floating-cancel-prices"
+        class="btn bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white px-4 py-3 rounded-2xl shadow-2xl font-bold flex items-center gap-2 transition-all">
+        <i data-lucide="x-circle" class="w-5 h-5"></i> İptal
+    </button>
     <button type="button" id="btn-floating-save-prices-quick"
         class="btn bg-blue-600 hover:bg-blue-500 border border-blue-500 text-white px-5 py-3 rounded-2xl shadow-2xl font-bold flex items-center gap-2 transition-all">
         <i data-lucide="zap" class="w-5 h-5"></i> Hepsine Uygula

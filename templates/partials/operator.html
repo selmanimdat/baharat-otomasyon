@@ -1,6 +1,20 @@
 <!-- ==================== 3. OPERATOR VIEW ==================== -->
 <div id="view-operator" class="hidden flex-1 flex flex-col">
 
+    <!-- Admin Return Banner -->
+    <div id="admin-return-banner" class="hidden bg-slate-900 border-b border-slate-800 py-2.5 px-6 flex justify-between items-center z-[99]">
+        <div class="flex items-center gap-2">
+            <span class="flex h-2 w-2 relative">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+            </span>
+            <span class="text-xs text-orange-400 font-bold uppercase tracking-wider font-outfit">Yönetici İzleme Modu (Operatör Ekranı)</span>
+        </div>
+        <button id="btn-return-to-admin" class="btn bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs px-4 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
+            <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Admin Paneline Dön
+        </button>
+    </div>
+
     <!-- 3.1 STATION SELECT (SCALES SELECT) -->
 
     <section id="operator-station-select" class="hidden flex-1 flex flex-col items-center justify-center p-6 relative">
@@ -67,9 +81,9 @@
                 </button>
                 <div class="flex flex-col min-w-0">
                     <span id="weighing-customer"
-                        class="text-orange-400 font-extrabold text-sm sm:text-base truncate">Lezzet Et Dünyası</span>
+                        class="text-orange-400 font-extrabold text-sm sm:text-base break-words leading-tight">Lezzet Et Dünyası</span>
                     <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
-                        <span id="weighing-recipe" class="text-slate-200 font-semibold text-xs sm:text-sm truncate">Dana
+                        <span id="weighing-recipe" class="text-slate-200 font-semibold text-xs sm:text-sm break-words leading-tight">Dana
                             Köfte Harcı</span>
                         <span id="weighing-batch-badge"
                             class="badge-blue text-[10px] whitespace-nowrap px-2 py-0.5 rounded-lg">P1 (50.00 kg)</span>
