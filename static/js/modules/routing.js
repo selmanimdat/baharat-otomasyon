@@ -56,13 +56,13 @@ async function handleLogin(username, password, role, rememberMe = false) {
             state.currentUser = res.user;
             state.view = res.user.role === 'operator' ? 'operator' : 'admin';
             state.loginStep = 'role_select';
-            
+
             if (rememberMe) {
                 localStorage.setItem('rememberedUser', JSON.stringify({ username, password, role }));
             } else {
                 localStorage.removeItem('rememberedUser');
             }
-            
+
             await fetchDb();
             updateUI();
         }
@@ -74,12 +74,12 @@ async function handleLogin(username, password, role, rememberMe = false) {
 async function handleLogout() {
     try {
         await apiPost('/api/auth/logout');
-    } catch (e) {}
+    } catch (e) { }
     localStorage.removeItem('rememberedUser');
     stopChecklistPolling();
     try {
         await disconnectScale();
-    } catch (e) {}
+    } catch (e) { }
     state.currentUser = null;
     state.view = 'login';
     state.loginStep = 'role_select';
@@ -122,8 +122,12 @@ function updateNavigationPermissions() {
     toggleEl(dom.tabReports, showReports);
     toggleEl(dom.tabTraceability, showReports || showOrders);
     toggleEl(dom.tabAccounting || document.getElementById('tab-accounting'), showReports || showOrders || isAdmin);
+    const showTrash = isAdmin || showRecipes || showOrders;
     toggleEl(dom.tabSettings, showSettings);
     toggleEl(dom.tabAuditLogs || document.getElementById('tab-audit-logs'), showSettings);
+    toggleEl(document.getElementById('tab-inventory'), isAdmin); // Only admins manage inventory
+    toggleEl(document.getElementById('tab-deliveries'), isAdmin || showOrders); // Admins and managers
+    toggleEl(document.getElementById('tab-trash'), showTrash);
 
     // Hide/show Backup options based on admin role
     const backupContainer = document.getElementById('btn-export-backup')?.parentElement;
@@ -132,6 +136,7 @@ function updateNavigationPermissions() {
     const allowedTabs = [];
     if (showDashboard) allowedTabs.push('dashboard');
     if (showOrders) allowedTabs.push('orders');
+    if (isAdmin || showOrders) allowedTabs.push('deliveries');
     if (showCustomers) allowedTabs.push('customers');
     if (showRecipes) allowedTabs.push('recipes');
     if (showUsers) allowedTabs.push('users');
@@ -139,10 +144,12 @@ function updateNavigationPermissions() {
     if (showReports) allowedTabs.push('reports');
     if (showReports || showOrders) allowedTabs.push('traceability');
     if (showReports || showOrders || isAdmin) allowedTabs.push('accounting');
+    if (isAdmin) allowedTabs.push('inventory');
     if (showSettings) {
         allowedTabs.push('settings');
         allowedTabs.push('audit-logs');
     }
+    if (showTrash) allowedTabs.push('trash');
 
     if (allowedTabs.length > 0 && !allowedTabs.includes(state.adminTab)) {
         state.adminTab = allowedTabs[0];

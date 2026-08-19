@@ -2,7 +2,7 @@ function bindEvents() {
     // Sidebar responsive toggle
     const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
     const adminSidebar = document.querySelector('#view-admin aside');
-    
+
     // Create backdrop overlay
     let backdrop = document.querySelector('.sidebar-backdrop');
     if (!backdrop) {
@@ -10,19 +10,19 @@ function bindEvents() {
         backdrop.className = 'sidebar-backdrop';
         document.getElementById('view-admin').appendChild(backdrop);
     }
-    
+
     if (btnToggleSidebar) {
         btnToggleSidebar?.addEventListener('click', () => {
             adminSidebar.classList.add('sidebar-active');
             backdrop.classList.add('active');
         });
     }
-    
+
     backdrop?.addEventListener('click', () => {
         adminSidebar.classList.remove('sidebar-active');
         backdrop.classList.remove('active');
     });
-    
+
     // Close sidebar on any button click
     const sidebarButtons = document.querySelectorAll('#view-admin aside button, #view-admin aside a, #view-admin aside .nav-item');
     sidebarButtons.forEach(btn => {
@@ -37,7 +37,7 @@ function bindEvents() {
         state.loginStep = 'admin_login';
         updateUI();
     });
-    
+
     dom.btnSelectOperator?.addEventListener('click', () => {
         state.loginStep = 'operator_login';
         updateUI();
@@ -75,7 +75,7 @@ function bindEvents() {
 
     // Logout Click
     dom.btnAdminLogout?.addEventListener('click', handleLogout);
-    
+
     document.querySelectorAll('.btn-operator-logout').forEach(btn => {
         btn?.addEventListener('click', handleLogout);
     });
@@ -83,6 +83,7 @@ function bindEvents() {
     // Admin Sidebar Tab switching
     document.getElementById('tab-dashboard')?.addEventListener('click', () => { state.adminTab = 'dashboard'; renderAdminPanel(); });
     document.getElementById('tab-orders')?.addEventListener('click', () => { state.adminTab = 'orders'; renderAdminPanel(); });
+    document.getElementById('tab-deliveries')?.addEventListener('click', () => { state.adminTab = 'deliveries'; renderAdminPanel(); });
     document.getElementById('tab-customers')?.addEventListener('click', () => { state.adminTab = 'customers'; renderAdminPanel(); });
     document.getElementById('tab-recipes')?.addEventListener('click', () => { state.adminTab = 'recipes'; state.activeFirmId = null; state.activeRecipeId = null; renderAdminPanel(); });
     document.getElementById('tab-users')?.addEventListener('click', () => { state.adminTab = 'users'; renderAdminPanel(); });
@@ -90,9 +91,12 @@ function bindEvents() {
     document.getElementById('tab-reports')?.addEventListener('click', () => { state.adminTab = 'reports'; renderAdminPanel(); });
     document.getElementById('tab-traceability')?.addEventListener('click', () => { state.adminTab = 'traceability'; renderAdminPanel(); });
     document.getElementById('tab-accounting')?.addEventListener('click', () => { state.adminTab = 'accounting'; renderAdminPanel(); });
+    document.getElementById('tab-current-accounts')?.addEventListener('click', () => { state.adminTab = 'current-accounts'; renderAdminPanel(); });
+    document.getElementById('tab-inventory')?.addEventListener('click', () => { state.adminTab = 'inventory'; renderAdminPanel(); });
     document.getElementById('tab-settings')?.addEventListener('click', () => { state.adminTab = 'settings'; renderAdminPanel(); });
     document.getElementById('tab-audit-logs')?.addEventListener('click', () => { state.adminTab = 'audit-logs'; renderAdminPanel(); });
-    
+    document.getElementById('tab-trash')?.addEventListener('click', () => { state.adminTab = 'trash'; renderAdminPanel(); });
+
     document.getElementById('tab-switch-operator')?.addEventListener('click', () => {
         state.view = 'operator';
         updateUI();
@@ -179,7 +183,7 @@ function bindEvents() {
                     currentOrder = settingObj.value.split('\n').map(s => s.trim()).filter(Boolean);
                 }
             }
-            
+
             if (currentOrder.includes(newName)) {
                 alert('Bu hammadde zaten listede var.');
                 return;
@@ -200,7 +204,7 @@ function bindEvents() {
             const existing = (state.db.settings || []).find(s => s.key === 'recipe_order');
             if (existing) existing.value = currentOrder.join('\n');
             else state.db.settings.push({ key: 'recipe_order', value: currentOrder.join('\n') });
-            
+
             if (typeof renderSettingsTab === 'function') renderSettingsTab();
             setTimeout(() => {
                 document.getElementById('settings-recipe-order-actions')?.classList.remove('hidden');
@@ -213,7 +217,7 @@ function bindEvents() {
         const val = e.target.value.toLowerCase().trim();
         const resultsContainer = document.getElementById('check-ingredient-results');
         if (!resultsContainer) return;
-        
+
         if (val.length < 2) {
             resultsContainer.innerHTML = '<span class="text-slate-500 italic text-xs">Yazmaya başlayın... (en az 2 harf)</span>';
             return;
@@ -228,9 +232,9 @@ function bindEvents() {
                 currentOrder = settingObj.value.split('\n').map(s => s.trim()).filter(Boolean);
             }
         }
-        
+
         const matches = currentOrder.filter(item => item.toLowerCase().includes(val));
-        
+
         if (matches.length === 0) {
             resultsContainer.innerHTML = '<span class="text-emerald-500 font-bold text-xs"><i data-lucide="check-circle" class="w-3 h-3 inline"></i> Bu ürün listede yok. Eklenebilir.</span>';
         } else {
@@ -271,7 +275,7 @@ function bindEvents() {
                         window.orderSegments = [];
                         if (typeof window.renderOrderSegments === 'function') window.renderOrderSegments();
                     }
-                } catch(e) {}
+                } catch (e) { }
             } else {
                 window.orderSegments = [];
                 if (typeof window.renderOrderSegments === 'function') window.renderOrderSegments();
@@ -321,7 +325,7 @@ function bindEvents() {
             urgency: fd.get('urgency') || 'normal',
             notes: fd.get('notes') || ''
         };
-        
+
         if (window.orderSegments && window.orderSegments.length > 0) {
             data.segments = window.orderSegments;
         }
@@ -332,7 +336,7 @@ function bindEvents() {
 
         try {
             await apiPost('/api/orders', data);
-            
+
             // Auto save capacity to settings (Overwrite with the capacities actually used in this order)
             if (data.firmId) {
                 let uniqueCapacities = [];
@@ -352,13 +356,13 @@ function bindEvents() {
                 const setting = (state.db.settings || []).find(s => s.key === 'firm_mixer_capacities');
                 let capData = {};
                 if (setting && setting.value) {
-                    try { capData = JSON.parse(setting.value); } catch(e) {}
+                    try { capData = JSON.parse(setting.value); } catch (e) { }
                 }
                 const fKey = String(data.firmId);
-                
+
                 // Overwrite the capacities for this firm
                 capData[fKey] = uniqueCapacities;
-                
+
                 await apiPost('/api/settings', {
                     key: 'firm_mixer_capacities',
                     value: JSON.stringify(capData)
@@ -385,7 +389,7 @@ function bindEvents() {
         state.activeRecipeId = null;
         renderRecipesTab();
     });
-    
+
     document.querySelectorAll('.btn-back-to-firms').forEach(btn => {
         btn?.addEventListener('click', () => {
             state.activeFirmId = null;
@@ -418,7 +422,7 @@ function bindEvents() {
             dom.formAddFirm.reset();
             await fetchDb();
             renderRecipesTab();
-        } catch(e) {}
+        } catch (e) { }
     });
 
     // Add Recipe
@@ -430,7 +434,7 @@ function bindEvents() {
             dom.formAddRecipe.reset();
             await fetchDb();
             renderRecipesTab();
-        } catch(e) {}
+        } catch (e) { }
     });
 
     // Add Ingredient
@@ -442,7 +446,7 @@ function bindEvents() {
         const fd = new FormData(dom.formAddIngredient);
         const name = (fd.get('name') || '').trim();
         if (!name) return;
-        
+
         // Validate against settings list
         let allowed = [];
         const settingObj = (state.db.settings || []).find(s => s.key === 'recipe_order');
@@ -506,7 +510,7 @@ function bindEvents() {
                     ingNameInput.focus({ preventScroll: true });
                 }
             }, 150);
-        } catch(e) {
+        } catch (e) {
             console.error(e);
         } finally {
             isAddingIngredientToRecipe = false;
@@ -525,7 +529,7 @@ function bindEvents() {
             dom.formAddUser.reset();
             await fetchDb();
             renderUsersTab();
-        } catch (e) {}
+        } catch (e) { }
     });
 
     // Add Scale
@@ -538,7 +542,7 @@ function bindEvents() {
         const connection_type = fd.get('connection_type') || 'wired';
         const data_format = fd.get('data_format') || 'densi';
         const is_simulator = dom.formAddScale.querySelector('#scale-simulator').value === 'true';
-        
+
         try {
             let testSuccess = false;
             let errorMessage = '';
@@ -572,7 +576,7 @@ function bindEvents() {
                 const proceed = confirm(`Cihaza bağlantı kurulamadı: ${errorMessage}\nCihazı yine de kaydetmek istiyor musunuz?`);
                 if (!proceed) return;
             }
-            
+
             const res = await apiPost('/api/scales', { name, ip, port, is_simulator, connection_type, data_format });
             if (res.success) {
                 alert(`"${name}" terazisi başarıyla sisteme eklendi.`);
@@ -580,7 +584,7 @@ function bindEvents() {
                 await fetchDb();
                 renderScalesTab();
             }
-        } catch (e) {}
+        } catch (e) { }
     });
 
     // Reports Filters event hooks
@@ -679,7 +683,7 @@ function bindEvents() {
             stopChecklistPolling();
             try {
                 await disconnectScale();
-            } catch (e) {}
+            } catch (e) { }
             state.activeJob = null;
             renderOperatorPanel();
         }
@@ -688,7 +692,7 @@ function bindEvents() {
         try {
             await apiPut(`/api/batches/${state.activeJob.batch.id}/status`, { status: 'paketlemede' });
             await fetchDb();
-        } catch (e) {}
+        } catch (e) { }
         if (dom.checklistCompletionPanel) dom.checklistCompletionPanel.classList.add('hidden');
         showPackagingScreen();
     });
@@ -720,7 +724,7 @@ function bindEvents() {
     dom.simulatorSlider?.addEventListener('input', async () => {
         const val = parseFloat(dom.simulatorSlider.value) || 0.0;
         dom.simGross.textContent = `Brüt: ${val.toFixed(2)} gr`;
-        
+
         if (state.connectedScale && state.connectedScale.is_simulator) {
             try {
                 await fetch(`/api/scales/${state.connectedScale.id}/weight`, {
@@ -737,8 +741,8 @@ function bindEvents() {
     dom.btnWeighingConfirm?.addEventListener('click', async () => {
         if (state.activeWeighingItem && state.activeWeighingItem.actualWeight !== undefined) {
             await approveIngredient(
-                state.activeWeighingItem.name, 
-                state.activeWeighingItem.targetAmount, 
+                state.activeWeighingItem.name,
+                state.activeWeighingItem.targetAmount,
                 state.activeWeighingItem.actualWeight
             );
             state.activeWeighingItem = null;
@@ -755,7 +759,7 @@ const handleReactNativeMessage = (e) => {
         if (data.type === 'weight') {
             const weightVal = parseFloat(data.weight) || 0.0;
             state.nativeWeight = weightVal;
-            
+
             // Immediately update UI for the active scale (if not simulated)
             if (state.connectedScale && !state.connectedScale.is_simulator) {
                 // Update live weight on scales tab if active
@@ -769,7 +773,7 @@ const handleReactNativeMessage = (e) => {
                 }
             }
         }
-    } catch(err) {}
+    } catch (err) { }
 };
 window?.addEventListener('message', handleReactNativeMessage);
 document?.addEventListener('message', handleReactNativeMessage);

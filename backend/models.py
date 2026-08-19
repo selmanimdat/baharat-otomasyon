@@ -100,6 +100,8 @@ class Recipe(db.Model):
     updated_by = db.Column(db.String(100), nullable=True)
     hide_separate_colors = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+    deleted_by = db.Column(db.String(100), nullable=True)
     
     is_custom_kg_based = db.Column(db.Boolean, default=False)
     
@@ -119,6 +121,8 @@ class Recipe(db.Model):
             'updatedBy': getattr(self, 'updated_by', None),
             'hideSeparateColors': self.hide_separate_colors,
             'isActive': self.is_active if self.is_active is not None else True,
+            'deletedAt': self.deleted_at.replace(tzinfo=timezone.utc).isoformat() if getattr(self, 'deleted_at', None) else None,
+            'deletedBy': getattr(self, 'deleted_by', None),
             'isCustomKgBased': getattr(self, 'is_custom_kg_based', False),
             'items': [item.to_dict() for item in self.items]
         }
@@ -179,8 +183,13 @@ class Order(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     created_by = db.Column(db.String(100), nullable=True, default='Sistem')
     notes = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+    deleted_by = db.Column(db.String(100), nullable=True)
+    delivered_amount = db.Column(db.Float, default=0.0)
     
     batches = db.relationship('Batch', backref='order', cascade='all, delete-orphan')
+    deliveries = db.relationship('OrderDelivery', backref='order', cascade='all, delete-orphan')
 
     def to_dict(self):
         firm = Firm.query.filter_by(name=self.customer_name).first()
@@ -208,6 +217,7 @@ class Order(db.Model):
             'recipeItems': items_dict,
             'isCustomKgBased': getattr(recipe_query, 'is_custom_kg_based', False) if recipe_query else False,
             'totalAmount': self.total_amount,
+            'deliveredAmount': self.delivered_amount or 0.0,
             'bagWeight': self.bag_weight or 20.0,
             'packagingSegments': packaging_segments,
             'deliveryDate': self.delivery_date or '',
@@ -215,7 +225,27 @@ class Order(db.Model):
             'createdAt': self.created_at.replace(tzinfo=timezone.utc).isoformat() if self.created_at else None,
             'createdBy': self.created_by or 'Sistem',
             'notes': self.notes or '',
-            'batches': [b.to_dict() for b in self.batches]
+            'isActive': self.is_active if self.is_active is not None else True,
+            'deletedAt': self.deleted_at.replace(tzinfo=timezone.utc).isoformat() if getattr(self, 'deleted_at', None) else None,
+            'deletedBy': getattr(self, 'deleted_by', None),
+            'batches': [b.to_dict() for b in self.batches],
+            'deliveries': [d.to_dict() for d in self.deliveries]
+        }
+
+class OrderDelivery(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('order.id', ondelete='CASCADE'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    delivered_by = db.Column(db.String(100), nullable=False)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'orderId': self.order_id,
+            'amount': self.amount,
+            'deliveredBy': self.delivered_by,
+            'timestamp': self.timestamp.replace(tzinfo=timezone.utc).isoformat() if self.timestamp else None
         }
 
 class Batch(db.Model):
@@ -366,4 +396,44 @@ class AuditLog(db.Model):
             'newValue': self.new_value,
             'description': self.description or '',
             'isReverted': self.is_reverted
+        }
+
+class Inventory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ingredient_name = db.Column(db.String(200), unique=True, nullable=False)
+    current_stock = db.Column(db.Float, default=0.0)
+    warning_threshold = db.Column(db.Float, default=0.0)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'ingredientName': self.ingredient_name,
+            'currentStock': self.current_stock,
+            'warningThreshold': self.warning_threshold,
+            'updatedAt': self.updated_at.replace(tzinfo=timezone.utc).isoformat() if self.updated_at else None
+        }
+
+class InventoryTransaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ingredient_name = db.Column(db.String(200), nullable=False)
+    transaction_type = db.Column(db.String(50), nullable=False) # 'IN', 'OUT'
+    amount = db.Column(db.Float, nullable=False)
+    previous_stock = db.Column(db.Float, nullable=False)
+    new_stock = db.Column(db.Float, nullable=False)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.Column(db.String(100), nullable=True, default='Sistem')
+    notes = db.Column(db.Text, nullable=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'ingredientName': self.ingredient_name,
+            'transactionType': self.transaction_type,
+            'amount': self.amount,
+            'previousStock': self.previous_stock,
+            'newStock': self.new_stock,
+            'timestamp': self.timestamp.replace(tzinfo=timezone.utc).isoformat() if self.timestamp else None,
+            'user': self.user,
+            'notes': self.notes or ''
         }

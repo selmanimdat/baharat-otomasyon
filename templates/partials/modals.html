@@ -1,268 +1,305 @@
-    <!-- Traceability Detail Modal Overlay -->
-    <div id="trace-modal-overlay"
-        class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+<!-- Traceability Detail Modal Overlay -->
+<div id="trace-modal-overlay"
+    class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div
+        class="card bg-slate-900 border border-slate-800 p-8 rounded-2xl max-w-4xl w-full shadow-2xl relative overflow-y-auto max-h-[90vh]">
+        <button id="btn-close-trace-modal"
+            class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
+            <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+
         <div
-            class="card bg-slate-900 border border-slate-800 p-8 rounded-2xl max-w-4xl w-full shadow-2xl relative overflow-y-auto max-h-[90vh]">
-            <button id="btn-close-trace-modal"
-                class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
-                <i data-lucide="x" class="w-6 h-6"></i>
-            </button>
-
-            <div
-                class="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-6 mb-6 gap-6">
-                <div>
-                    <span
-                        class="inline-block text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-slate-950 text-slate-400 border border-slate-800 mb-2">Parti
-                        Raporu</span>
-                    <h3 id="trace-modal-title" class="text-2xl font-extrabold font-outfit text-white">Parti: B_DEMO_3
-                    </h3>
-                    <p class="text-slate-400 text-sm mt-1">İzlenebilirlik ve doğrulama kayıtları</p>
-                </div>
-                <!-- Barcode Container -->
-                <div class="flex flex-col items-center bg-white p-3 rounded-xl border border-slate-800 text-black">
-                    <div id="trace-modal-barcode" class="font-barcode text-4xl tracking-widest text-center"
-                        style="font-family: 'Libre Barcode 128', sans-serif;">*B_DEMO_3*</div>
-                    <span id="trace-modal-barcode-text"
-                        class="text-xs font-mono font-bold mt-1 text-slate-600">B_DEMO_3</span>
-                </div>
+            class="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-6 mb-6 gap-6">
+            <div>
+                <span
+                    class="inline-block text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-slate-950 text-slate-400 border border-slate-800 mb-2">Parti
+                    Raporu</span>
+                <h3 id="trace-modal-title" class="text-2xl font-extrabold font-outfit text-white">Parti: B_DEMO_3
+                </h3>
+                <p class="text-slate-400 text-sm mt-1">İzlenebilirlik ve doğrulama kayıtları</p>
             </div>
-
-            <!-- Metadata Grid -->
-            <div
-                class="grid grid-cols-2 md:grid-cols-4 gap-6 bg-slate-950/50 p-5 rounded-xl border border-slate-850/80 mb-6">
-                <div>
-                    <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Müşteri
-                        Firma</span>
-                    <span id="trace-modal-customer" class="text-sm font-bold text-white mt-1 block">-</span>
-                </div>
-                <div>
-                    <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ürün /
-                        Reçete</span>
-                    <span id="trace-modal-recipe" class="text-sm font-bold text-white mt-1 block">-</span>
-                </div>
-                <div>
-                    <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Operatör
-                        Usta</span>
-                    <span id="trace-modal-operator" class="text-sm font-bold text-white mt-1 block">-</span>
-                </div>
-                <div>
-                    <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Toplam Hedef
-                        Ağırlık</span>
-                    <span id="trace-modal-target" class="text-sm font-bold text-white mt-1 block">-</span>
-                </div>
-            </div>
-
-            <!-- Weighed Ingredients Table -->
-            <div class="mb-8">
-                <h4 class="text-sm font-bold text-slate-350 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <i data-lucide="list" class="w-4 h-4 text-orange-400"></i> Tartılan Hammaddeler
-                </h4>
-                <div class="overflow-x-auto border border-slate-850 rounded-xl">
-                    <table class="w-full text-sm text-left table-auto">
-                        <thead class="bg-slate-950 text-slate-400 border-b border-slate-850">
-                            <tr>
-                                <th class="p-3">Hammadde</th>
-                                <th class="p-3">Hedef (gr)</th>
-                                <th class="p-3">Tartılan (gr)</th>
-                                <th class="p-3">Hata / Sapma</th>
-                                <th class="p-3">Tarih</th>
-                                <th class="p-3 text-center">Durum</th>
-                            </tr>
-                        </thead>
-                        <tbody id="trace-modal-table-body" class="divide-y divide-slate-850/50">
-                            <!-- Dynamic rows -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Actions -->
-            <div class="flex flex-col sm:flex-row justify-end gap-3 border-t border-slate-800 pt-6">
-                <button id="btn-trace-modal-pdf" class="btn btn-slate py-3 px-6 flex items-center justify-center gap-2">
-                    <i data-lucide="file-text" class="w-4 h-4"></i> PDF Rapor Yazdır
-                </button>
-                <button id="btn-trace-modal-label"
-                    class="btn btn-orange py-3 px-6 flex items-center justify-center gap-2">
-                    <i data-lucide="printer" class="w-4 h-4"></i> Etiket Bas (Zebra/PDF)
-                </button>
+            <!-- Barcode Container -->
+            <div class="flex flex-col items-center bg-white p-3 rounded-xl border border-slate-800 text-black">
+                <div id="trace-modal-barcode" class="font-barcode text-4xl tracking-widest text-center"
+                    style="font-family: 'Libre Barcode 128', sans-serif;">*B_DEMO_3*</div>
+                <span id="trace-modal-barcode-text"
+                    class="text-xs font-mono font-bold mt-1 text-slate-600">B_DEMO_3</span>
             </div>
         </div>
-    </div>
 
-    <!-- Scale Connection Modal Overlay -->
-    <div id="scale-modal-overlay"
-        class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div class="card bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-md w-full shadow-2xl relative">
-            <button id="btn-close-scale-modal"
-                class="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
-                <i data-lucide="x" class="w-6 h-6"></i>
-            </button>
-            <h3 class="text-xl font-extrabold font-outfit text-white mb-2 flex items-center gap-2">
-                <i data-lucide="scale" class="w-6 h-6 text-orange-400"></i> Akıllı Terazi Bağlantısı
-            </h3>
-            <p class="text-slate-400 text-sm mb-6">Lütfen bağlanmak istediğiniz terazi istasyonunu seçin.</p>
-
-            <div id="modal-scales-list" class="space-y-3 max-h-60 overflow-y-auto mb-6 pr-1">
-                <!-- Scales will be injected dynamically -->
+        <!-- Metadata Grid -->
+        <div
+            class="grid grid-cols-2 md:grid-cols-4 gap-6 bg-slate-950/50 p-5 rounded-xl border border-slate-850/80 mb-6">
+            <div>
+                <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Müşteri
+                    Firma</span>
+                <span id="trace-modal-customer" class="text-sm font-bold text-white mt-1 block">-</span>
             </div>
-
-            <div id="modal-connection-status"
-                class="hidden p-3 rounded-xl bg-slate-950 border border-slate-850 text-xs font-mono text-center">
-                <!-- Status text -->
+            <div>
+                <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Ürün /
+                    Reçete</span>
+                <span id="trace-modal-recipe" class="text-sm font-bold text-white mt-1 block">-</span>
             </div>
-        </div>
-    </div>
-
-    <!-- Customer Modal Overlay -->
-    <div id="customer-modal-overlay"
-        class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div class="card bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-2xl max-w-lg w-full shadow-2xl relative overflow-y-auto max-h-[90vh]">
-            <button id="btn-close-customer-modal"
-                class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
-                <i data-lucide="x" class="w-6 h-6"></i>
-            </button>
-
-            <h3 id="customer-modal-title" class="text-xl font-extrabold font-outfit text-white mb-1 flex items-center gap-2">
-                <i data-lucide="building-2" class="w-6 h-6 text-orange-400"></i> Yeni Müşteri Ekle
-            </h3>
-            <p class="text-slate-400 text-xs mb-6">Müşteri ve firma detaylarını eksiksiz doldurunuz.</p>
-
-            <form id="form-customer-modal" class="space-y-4">
-                <input type="hidden" id="cust-modal-id" name="id">
-
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Müşteri / Firma Adı *</label>
-                    <input type="text" id="cust-modal-name" name="name" required placeholder="Örn: Soylu Gıda A.Ş." class="input-field py-2 text-sm">
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Yetkili Kişi</label>
-                        <input type="text" id="cust-modal-contact" name="contactPerson" placeholder="Örn: Ahmet Yılmaz" class="input-field py-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Telefon</label>
-                        <input type="tel" id="cust-modal-phone" name="phone" placeholder="Örn: 0532 000 00 00" class="input-field py-2 text-sm">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">E-Posta</label>
-                        <input type="email" id="cust-modal-email" name="email" placeholder="ornek@firma.com" class="input-field py-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Vergi Dairesi / No</label>
-                        <input type="text" id="cust-modal-tax" name="taxId" placeholder="Örn: Maslak V.D. 12345" class="input-field py-2 text-sm">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Adres</label>
-                    <textarea id="cust-modal-address" name="address" rows="2" placeholder="Firma açık adresi..." class="input-field py-2 text-sm"></textarea>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Özel Notlar</label>
-                    <textarea id="cust-modal-notes" name="notes" rows="2" placeholder="Firma hakkında notlar..." class="input-field py-2 text-sm"></textarea>
-                </div>
-
-                <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                    <button type="button" id="btn-cancel-customer-modal" class="btn btn-slate py-2.5 px-5 text-xs font-bold">İptal</button>
-                    <button type="submit" id="btn-save-customer" class="btn btn-orange py-2.5 px-6 text-xs font-bold">Kaydet</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-
-    <!-- Apply Recipe Order Modal Overlay -->
-    <div id="modal-apply-order-overlay"
-        class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div class="card bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-2xl max-w-2xl w-full shadow-2xl relative overflow-y-auto max-h-[90vh]">
-            <button id="btn-close-apply-order-modal"
-                class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
-                <i data-lucide="x" class="w-6 h-6"></i>
-            </button>
-
-            <h3 class="text-xl font-extrabold font-outfit text-white mb-1 flex items-center gap-2">
-                <i data-lucide="list-checks" class="w-6 h-6 text-orange-400"></i> Sıralama Değişikliklerini Uygula
-            </h3>
-            <p class="text-slate-400 text-xs mb-6">Genel ayarlarda yaptığınız sıralama değişikliğini mevcut reçetelere nasıl uygulamak istersiniz?</p>
-
-            <div class="space-y-4">
-                <div class="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
-                    <label class="block text-xs font-bold text-slate-400 uppercase mb-3">Uygulama Modu Seçin</label>
-                    <div class="space-y-2">
-                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
-                            <input type="radio" name="apply_mode" value="all" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
-                            <span class="text-sm font-medium text-slate-200">Tüm Mevcut Reçetelere Uygula</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
-                            <input type="radio" name="apply_mode" value="none" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500" checked>
-                            <span class="text-sm font-medium text-slate-200">Hiçbirine Uygulama (Sadece varsayılan ayarı kaydet)</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
-                            <input type="radio" name="apply_mode" value="date_range" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
-                            <span class="text-sm font-medium text-slate-200">Şu Tarihler Arasındakilere Uygula</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
-                            <input type="radio" name="apply_mode" value="before_date" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
-                            <span class="text-sm font-medium text-slate-200">Şu Tarihten Öncekilere Uygula</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
-                            <input type="radio" name="apply_mode" value="after_date" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
-                            <span class="text-sm font-medium text-slate-200">Şu Tarihten Sonrakilere Uygula</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
-                            <input type="radio" name="apply_mode" value="include_specific" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
-                            <span class="text-sm font-medium text-slate-200">Özel Seçim (Sadece Şunlara Uygula)</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
-                            <input type="radio" name="apply_mode" value="exclude_specific" class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
-                            <span class="text-sm font-medium text-slate-200">Özel Seçim (Şunlar Hariç Hepsine Uygula)</span>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Dynamic input sections based on mode -->
-                <div id="apply-mode-inputs" class="hidden bg-slate-950/50 p-4 rounded-xl border border-slate-800">
-                    <!-- Date Range Inputs -->
-                    <div id="input-date-range" class="hidden flex gap-4">
-                        <div class="flex-1">
-                            <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Başlangıç Tarihi</label>
-                            <input type="date" id="apply-start-date" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
-                        </div>
-                        <div class="flex-1">
-                            <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Bitiş Tarihi</label>
-                            <input type="date" id="apply-end-date" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
-                        </div>
-                    </div>
-                    <!-- Single Date Input (Before/After) -->
-                    <div id="input-single-date" class="hidden">
-                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Referans Tarih</label>
-                        <input type="date" id="apply-single-date" class="w-full max-w-xs bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
-                    </div>
-                    <!-- Specific Selection Checkboxes -->
-                    <div id="input-specific-selection" class="hidden">
-                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Reçeteleri Seçin</label>
-                        <div class="mb-2">
-                            <input type="text" id="apply-recipe-search" placeholder="Reçete Ara..." class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500 mb-2">
-                            <button type="button" id="btn-select-all-recipes" class="text-xs font-bold text-orange-400 hover:text-orange-300">Hepsini Seç</button>
-                            <span class="text-slate-600 mx-2">|</span>
-                            <button type="button" id="btn-deselect-all-recipes" class="text-xs font-bold text-slate-400 hover:text-slate-300">Seçimi Temizle</button>
-                        </div>
-                        <div id="apply-recipe-list" class="max-h-48 overflow-y-auto space-y-1 pr-2 border border-slate-800 rounded bg-slate-950 p-2">
-                            <!-- Populated dynamically -->
-                        </div>
-                    </div>
-                </div>
-
+            <div>
+                <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Operatör
+                    Usta</span>
+                <span id="trace-modal-operator" class="text-sm font-bold text-white mt-1 block">-</span>
             </div>
-
-            <div class="flex justify-end gap-3 pt-6 mt-4 border-t border-slate-800">
-                <button type="button" id="btn-cancel-apply-order" class="btn btn-slate py-2.5 px-5 text-xs font-bold">İptal Et</button>
-                <button type="button" id="btn-confirm-apply-order" class="btn btn-orange py-2.5 px-6 text-xs font-bold shadow-lg shadow-orange-900/20">Değişiklikleri Onayla</button>
+            <div>
+                <span class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">Toplam Hedef
+                    Ağırlık</span>
+                <span id="trace-modal-target" class="text-sm font-bold text-white mt-1 block">-</span>
             </div>
         </div>
+
+        <!-- Weighed Ingredients Table -->
+        <div class="mb-8">
+            <h4 class="text-sm font-bold text-slate-350 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <i data-lucide="list" class="w-4 h-4 text-orange-400"></i> Tartılan Hammaddeler
+            </h4>
+            <div class="overflow-x-auto border border-slate-850 rounded-xl">
+                <table class="w-full text-sm text-left table-auto">
+                    <thead class="bg-slate-950 text-slate-400 border-b border-slate-850">
+                        <tr>
+                            <th class="p-3">Hammadde</th>
+                            <th class="p-3">Hedef (gr)</th>
+                            <th class="p-3">Tartılan (gr)</th>
+                            <th class="p-3">Hata / Sapma</th>
+                            <th class="p-3">Tarih</th>
+                            <th class="p-3 text-center">Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trace-modal-table-body" class="divide-y divide-slate-850/50">
+                        <!-- Dynamic rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex flex-col sm:flex-row justify-end gap-3 border-t border-slate-800 pt-6">
+            <button id="btn-trace-modal-pdf" class="btn btn-slate py-3 px-6 flex items-center justify-center gap-2">
+                <i data-lucide="file-text" class="w-4 h-4"></i> PDF Rapor Yazdır
+            </button>
+            <button id="btn-trace-modal-label" class="btn btn-orange py-3 px-6 flex items-center justify-center gap-2">
+                <i data-lucide="printer" class="w-4 h-4"></i> Etiket Bas (Zebra/PDF)
+            </button>
+        </div>
     </div>
+</div>
+
+<!-- Scale Connection Modal Overlay -->
+<div id="scale-modal-overlay"
+    class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div class="card bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-md w-full shadow-2xl relative">
+        <button id="btn-close-scale-modal"
+            class="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
+            <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+        <h3 class="text-xl font-extrabold font-outfit text-white mb-2 flex items-center gap-2">
+            <i data-lucide="scale" class="w-6 h-6 text-orange-400"></i> Akıllı Terazi Bağlantısı
+        </h3>
+        <p class="text-slate-400 text-sm mb-6">Lütfen bağlanmak istediğiniz terazi istasyonunu seçin.</p>
+
+        <div id="modal-scales-list" class="space-y-3 max-h-60 overflow-y-auto mb-6 pr-1">
+            <!-- Scales will be injected dynamically -->
+        </div>
+
+        <div id="modal-connection-status"
+            class="hidden p-3 rounded-xl bg-slate-950 border border-slate-850 text-xs font-mono text-center">
+            <!-- Status text -->
+        </div>
+    </div>
+</div>
+
+<!-- Customer Modal Overlay -->
+<div id="customer-modal-overlay"
+    class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div
+        class="card bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-2xl max-w-lg w-full shadow-2xl relative overflow-y-auto max-h-[90vh]">
+        <button id="btn-close-customer-modal"
+            class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
+            <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+
+        <h3 id="customer-modal-title"
+            class="text-xl font-extrabold font-outfit text-white mb-1 flex items-center gap-2">
+            <i data-lucide="building-2" class="w-6 h-6 text-orange-400"></i> Yeni Müşteri Ekle
+        </h3>
+        <p class="text-slate-400 text-xs mb-6">Müşteri ve firma detaylarını eksiksiz doldurunuz.</p>
+
+        <form id="form-customer-modal" class="space-y-4">
+            <input type="hidden" id="cust-modal-id" name="id">
+
+            <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Müşteri / Firma Adı *</label>
+                <input type="text" id="cust-modal-name" name="name" required placeholder="Örn: Soylu Gıda A.Ş."
+                    class="input-field py-2 text-sm">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Yetkili Kişi</label>
+                    <input type="text" id="cust-modal-contact" name="contactPerson" placeholder="Örn: Ahmet Yılmaz"
+                        class="input-field py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Telefon</label>
+                    <input type="tel" id="cust-modal-phone" name="phone" placeholder="Örn: 0532 000 00 00"
+                        class="input-field py-2 text-sm">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">E-Posta</label>
+                    <input type="email" id="cust-modal-email" name="email" placeholder="ornek@firma.com"
+                        class="input-field py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Vergi Dairesi / No</label>
+                    <input type="text" id="cust-modal-tax" name="taxId" placeholder="Örn: Maslak V.D. 12345"
+                        class="input-field py-2 text-sm">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Adres</label>
+                <textarea id="cust-modal-address" name="address" rows="2" placeholder="Firma açık adresi..."
+                    class="input-field py-2 text-sm"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Özel Notlar</label>
+                <textarea id="cust-modal-notes" name="notes" rows="2" placeholder="Firma hakkında notlar..."
+                    class="input-field py-2 text-sm"></textarea>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                <button type="button" id="btn-cancel-customer-modal"
+                    class="btn btn-slate py-2.5 px-5 text-xs font-bold">İptal</button>
+                <button type="submit" id="btn-save-customer"
+                    class="btn btn-orange py-2.5 px-6 text-xs font-bold">Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<!-- Apply Recipe Order Modal Overlay -->
+<div id="modal-apply-order-overlay"
+    class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div
+        class="card bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-2xl max-w-2xl w-full shadow-2xl relative overflow-y-auto max-h-[90vh]">
+        <button id="btn-close-apply-order-modal"
+            class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
+            <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+
+        <h3 class="text-xl font-extrabold font-outfit text-white mb-1 flex items-center gap-2">
+            <i data-lucide="list-checks" class="w-6 h-6 text-orange-400"></i> Sıralama Değişikliklerini Uygula
+        </h3>
+        <p class="text-slate-400 text-xs mb-6">Genel ayarlarda yaptığınız sıralama değişikliğini mevcut reçetelere nasıl
+            uygulamak istersiniz?</p>
+
+        <div class="space-y-4">
+            <div class="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                <label class="block text-xs font-bold text-slate-400 uppercase mb-3">Uygulama Modu Seçin</label>
+                <div class="space-y-2">
+                    <label
+                        class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                        <input type="radio" name="apply_mode" value="all"
+                            class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
+                        <span class="text-sm font-medium text-slate-200">Tüm Mevcut Reçetelere Uygula</span>
+                    </label>
+                    <label
+                        class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                        <input type="radio" name="apply_mode" value="none"
+                            class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500" checked>
+                        <span class="text-sm font-medium text-slate-200">Hiçbirine Uygulama (Sadece varsayılan ayarı
+                            kaydet)</span>
+                    </label>
+                    <label
+                        class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                        <input type="radio" name="apply_mode" value="date_range"
+                            class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
+                        <span class="text-sm font-medium text-slate-200">Şu Tarihler Arasındakilere Uygula</span>
+                    </label>
+                    <label
+                        class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                        <input type="radio" name="apply_mode" value="before_date"
+                            class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
+                        <span class="text-sm font-medium text-slate-200">Şu Tarihten Öncekilere Uygula</span>
+                    </label>
+                    <label
+                        class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                        <input type="radio" name="apply_mode" value="after_date"
+                            class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
+                        <span class="text-sm font-medium text-slate-200">Şu Tarihten Sonrakilere Uygula</span>
+                    </label>
+                    <label
+                        class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                        <input type="radio" name="apply_mode" value="include_specific"
+                            class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
+                        <span class="text-sm font-medium text-slate-200">Özel Seçim (Sadece Şunlara Uygula)</span>
+                    </label>
+                    <label
+                        class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors border border-transparent hover:border-slate-700">
+                        <input type="radio" name="apply_mode" value="exclude_specific"
+                            class="w-4 h-4 text-orange-500 bg-slate-900 border-slate-700 focus:ring-orange-500">
+                        <span class="text-sm font-medium text-slate-200">Özel Seçim (Şunlar Hariç Hepsine Uygula)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Dynamic input sections based on mode -->
+            <div id="apply-mode-inputs" class="hidden bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                <!-- Date Range Inputs -->
+                <div id="input-date-range" class="hidden flex gap-4">
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Başlangıç Tarihi</label>
+                        <input type="date" id="apply-start-date"
+                            class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Bitiş Tarihi</label>
+                        <input type="date" id="apply-end-date"
+                            class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
+                    </div>
+                </div>
+                <!-- Single Date Input (Before/After) -->
+                <div id="input-single-date" class="hidden">
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Referans Tarih</label>
+                    <input type="date" id="apply-single-date"
+                        class="w-full max-w-xs bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500">
+                </div>
+                <!-- Specific Selection Checkboxes -->
+                <div id="input-specific-selection" class="hidden">
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Reçeteleri Seçin</label>
+                    <div class="mb-2">
+                        <input type="text" id="apply-recipe-search" placeholder="Reçete Ara..."
+                            class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white outline-none focus:border-orange-500 mb-2">
+                        <button type="button" id="btn-select-all-recipes"
+                            class="text-xs font-bold text-orange-400 hover:text-orange-300">Hepsini Seç</button>
+                        <span class="text-slate-600 mx-2">|</span>
+                        <button type="button" id="btn-deselect-all-recipes"
+                            class="text-xs font-bold text-slate-400 hover:text-slate-300">Seçimi Temizle</button>
+                    </div>
+                    <div id="apply-recipe-list"
+                        class="max-h-48 overflow-y-auto space-y-1 pr-2 border border-slate-800 rounded bg-slate-950 p-2">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="flex justify-end gap-3 pt-6 mt-4 border-t border-slate-800">
+            <button type="button" id="btn-cancel-apply-order" class="btn btn-slate py-2.5 px-5 text-xs font-bold">İptal
+                Et</button>
+            <button type="button" id="btn-confirm-apply-order"
+                class="btn btn-orange py-2.5 px-6 text-xs font-bold shadow-lg shadow-orange-900/20">Değişiklikleri
+                Onayla</button>
+        </div>
+    </div>
+</div>

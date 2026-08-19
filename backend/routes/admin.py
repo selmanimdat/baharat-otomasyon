@@ -89,11 +89,14 @@ def rename_ingredient():
     # 2. Update RecipeItem table
     RecipeItem.query.filter_by(name=old_name).update({"name": new_name})
 
-    # 3. Add to SystemLog
-    from backend.models import SystemLog
-    
+    # 3. Update Inventory and InventoryTransaction tables
+    from backend.models import Inventory, InventoryTransaction, SystemLog
+    Inventory.query.filter_by(ingredient_name=old_name).update({"ingredient_name": new_name})
+    InventoryTransaction.query.filter_by(ingredient_name=old_name).update({"ingredient_name": new_name})
+
+    # 4. Add to SystemLog
     log_action = f"Hammadde Adı Değiştirildi: {old_name} -> {new_name}"
-    log_entry = SystemLog(user=current_user.name, action=log_action, details="Genel Ayarlar")
+    log_entry = SystemLog(user=current_user.name, action=log_action, details="Genel Ayarlar (Reçete & Depo)")
     db.session.add(log_entry)
     
     db.session.commit()
@@ -262,7 +265,12 @@ def update_firm(firm_id):
         existing = Firm.query.filter_by(name=name).first()
         if existing and existing.id != firm.id:
             return jsonify({'success': False, 'message': 'Bu isimde başka bir müşteri zaten var!'}), 400
-        firm.name = name
+        
+        old_name = firm.name
+        if old_name != name:
+            firm.name = name
+            Order.query.filter_by(customer_name=old_name).update({"customer_name": name}, synchronize_session=False)
+            WeighingLog.query.filter_by(customer=old_name).update({"customer": name}, synchronize_session=False)
 
     if 'phone' in data: firm.phone = data.get('phone', '').strip()
     if 'email' in data: firm.email = data.get('email', '').strip()
@@ -302,9 +310,13 @@ def manage_recipe(recipe_id):
     recipe = Recipe.query.get_or_404(recipe_id)
     
     if request.method == 'DELETE':
+        current_user = get_authenticated_user()
+        username = current_user.name if current_user else 'Sistem'
         recipe.is_active = False
+        recipe.deleted_at = datetime.now(timezone.utc)
+        recipe.deleted_by = username
         db.session.commit()
-        return jsonify({'success': True, 'message': 'Reçete pasif hale getirildi.'})
+        return jsonify({'success': True, 'message': 'Reçete çöp kutusuna taşındı.'})
         
     if request.method == 'PUT':
         data = request.json
@@ -780,6 +792,73 @@ def update_order(order_id):
     notify_websocket({'type': 'ORDER_UPDATED'})
     return jsonify({'success': True, 'order': order.to_dict()})
 
+@admin_bp.route('/orders/<int:order_id>/deliver', methods=['POST'])
+@require_permission('can_manage_orders')
+def deliver_order(order_id):
+    order = Order.query.get_or_404(order_id)
+    data = request.json or {}
+    amount = float(data.get('amount', 0))
+    delivered_by = data.get('deliveredBy', 'Admin')
+
+    if amount <= 0:
+        return jsonify({'success': False, 'message': 'Teslim edilecek miktar sıfırdan büyük olmalıdır.'}), 400
+
+    if (order.delivered_amount or 0.0) + amount > order.total_amount:
+        return jsonify({'success': False, 'message': 'Teslim edilecek miktar toplam sipariş miktarını aşamaz.'}), 400
+
+    # Depo düşüm işlemi
+    firm = Firm.query.filter_by(name=order.customer_name).first()
+    recipe = None
+    if firm:
+        recipe = Recipe.query.filter_by(name=order.recipe_name, firm_id=firm.id).first()
+    if not recipe:
+        recipe = Recipe.query.filter_by(name=order.recipe_name).first()
+
+    if recipe:
+        recipe_total_grams = sum(item.amount for item in recipe.items)
+        recipe_total_kg = recipe_total_grams / 1000.0
+
+        if recipe_total_kg > 0:
+            from backend.models import Inventory, InventoryTransaction
+            for item in recipe.items:
+                if getattr(item, 'is_not_included', False):
+                    continue
+                
+                # Her 1 kg son ürün için kullanılacak hammadde kg miktarı
+                ingredient_per_kg = (item.amount / 1000.0) / recipe_total_kg
+                deduction_kg = amount * ingredient_per_kg
+                
+                if deduction_kg > 0:
+                    inv = Inventory.query.filter_by(ingredient_name=item.name).first()
+                    if inv:
+                        prev_stock = inv.current_stock
+                        inv.current_stock -= deduction_kg
+                        txn = InventoryTransaction(
+                            ingredient_name=inv.ingredient_name,
+                            transaction_type='Çıkış',
+                            amount=deduction_kg,
+                            previous_stock=prev_stock,
+                            new_stock=inv.current_stock,
+                            timestamp=datetime.now(timezone.utc),
+                            notes=f"{order.customer_name} - {recipe.name} Sipariş Teslimatı",
+                            user=delivered_by
+                        )
+                        db.session.add(txn)
+
+    order.delivered_amount = (order.delivered_amount or 0.0) + amount
+    from backend.models import OrderDelivery
+    delivery = OrderDelivery(
+        order_id=order.id,
+        amount=amount,
+        delivered_by=delivered_by
+    )
+    db.session.add(delivery)
+    
+    db.session.commit()
+    from backend.services.websocket_notifier import notify_websocket
+    notify_websocket({'type': 'ORDER_UPDATED'})
+    return jsonify({'success': True, 'order': order.to_dict()})
+
 @admin_bp.route('/batches/<string:batch_id>', methods=['PUT'])
 @admin_bp.route('/batches/<string:batch_id>/status', methods=['PUT'])
 def update_batch(batch_id):
@@ -812,12 +891,46 @@ def delete_batch(batch_id):
     if not batch:
         return jsonify({'success': False, 'message': 'İş emri bulunamadı.'}), 404
     order = batch.order
-    WeighingLog.query.filter_by(batch_id=batch_id).delete()
-    db.session.delete(batch)
-    if order and len(order.batches) <= 1:
-        db.session.delete(order)
+    if order:
+        current_user = get_authenticated_user()
+        username = current_user.name if current_user else 'Sistem'
+        order.is_active = False
+        order.deleted_at = datetime.now(timezone.utc)
+        order.deleted_by = username
+        db.session.commit()
+        from backend.services.websocket_notifier import notify_websocket
+        notify_websocket({'type': 'ORDER_UPDATED'})
+        return jsonify({'success': True, 'message': 'Sipariş çöp kutusuna taşındı.'})
+    else:
+        db.session.delete(batch)
+        db.session.commit()
+        from backend.services.websocket_notifier import notify_websocket
+        notify_websocket({'type': 'ORDER_UPDATED'})
+        return jsonify({'success': True, 'message': 'İş emri silindi.'})
+
+@admin_bp.route('/recipes/<int:recipe_id>/restore', methods=['POST'])
+@require_permission('can_manage_recipes')
+def restore_deleted_recipe(recipe_id):
+    recipe = Recipe.query.get_or_404(recipe_id)
+    recipe.is_active = True
+    recipe.deleted_at = None
+    recipe.deleted_by = None
     db.session.commit()
-    return jsonify({'success': True})
+    from backend.services.websocket_notifier import notify_websocket
+    notify_websocket({'type': 'SETTINGS_UPDATED'})
+    return jsonify({'success': True, 'message': 'Reçete geri yüklendi.'})
+
+@admin_bp.route('/orders/<int:order_id>/restore', methods=['POST'])
+@require_permission('can_manage_orders')
+def restore_deleted_order(order_id):
+    order = Order.query.get_or_404(order_id)
+    order.is_active = True
+    order.deleted_at = None
+    order.deleted_by = None
+    db.session.commit()
+    from backend.services.websocket_notifier import notify_websocket
+    notify_websocket({'type': 'ORDER_UPDATED'})
+    return jsonify({'success': True, 'message': 'Sipariş geri yüklendi.'})
 
 @admin_bp.route('/batches/<string:batch_id>/extra_items', methods=['PUT'])
 def update_batch_extra_items(batch_id):
@@ -1261,3 +1374,199 @@ def apply_recipe_order():
         
     db.session.commit()
     return jsonify({'success': True, 'message': f'{len(recipes)} reçete güncellendi.'})
+
+# --- Inventory Management Endpoints ---
+
+@admin_bp.route('/inventory', methods=['GET'])
+def get_inventory():
+    from backend.models import SystemSetting, Inventory, db
+    import json
+    
+    # Get active ingredients list from SystemSetting
+    setting = SystemSetting.query.filter_by(key='recipe_order').first()
+    active_ingredients = []
+    if setting and setting.value:
+        active_ingredients = [x.strip() for x in setting.value.split('\n') if x.strip()]
+        
+    inventory_records = {inv.ingredient_name: inv for inv in Inventory.query.all()}
+    
+    results = []
+    for ing in active_ingredients:
+        inv = inventory_records.get(ing)
+        if inv:
+            results.append(inv.to_dict())
+        else:
+            results.append({
+                'id': None,
+                'ingredientName': ing,
+                'currentStock': 0.0,
+                'warningThreshold': 0.0,
+                'updatedAt': None
+            })
+            
+    return jsonify({'success': True, 'inventory': results})
+
+@admin_bp.route('/inventory/<string:ingredient_name>/transaction', methods=['POST'])
+def add_inventory_transaction(ingredient_name):
+    from backend.models import Inventory, InventoryTransaction, AuditLog, db
+    from backend.utils import get_authenticated_user
+    import json
+    from urllib.parse import unquote
+    
+    ingredient_name = unquote(ingredient_name)
+    data = request.json or {}
+    tx_type = data.get('type') # 'IN' or 'OUT'
+    amount = float(data.get('amount', 0))
+    notes = data.get('notes', '')
+    
+    if amount <= 0:
+        return jsonify({'success': False, 'message': 'Miktar 0\'dan büyük olmalıdır.'}), 400
+    if tx_type not in ['IN', 'OUT']:
+        return jsonify({'success': False, 'message': 'Geçersiz işlem tipi.'}), 400
+        
+    inv = Inventory.query.filter_by(ingredient_name=ingredient_name).first()
+    if not inv:
+        inv = Inventory(ingredient_name=ingredient_name, current_stock=0.0, warning_threshold=0.0)
+        db.session.add(inv)
+        db.session.flush()
+        
+    prev_stock = inv.current_stock
+    if tx_type == 'IN':
+        inv.current_stock += amount
+    else:
+        inv.current_stock -= amount
+        
+    new_stock = inv.current_stock
+    
+    current_user = get_authenticated_user()
+    user_name = current_user.name if current_user else 'Sistem'
+    
+    tx = InventoryTransaction(
+        ingredient_name=ingredient_name,
+        transaction_type=tx_type,
+        amount=amount,
+        previous_stock=prev_stock,
+        new_stock=new_stock,
+        user=user_name,
+        notes=notes
+    )
+    db.session.add(tx)
+    
+    # Audit log
+    action_text = 'Giriş' if tx_type == 'IN' else 'Çıkış'
+    log = AuditLog(
+        user=user_name,
+        entity_type='Inventory',
+        entity_id=ingredient_name,
+        action='UPDATE',
+        old_value=json.dumps({'stock': prev_stock}),
+        new_value=json.dumps({'stock': new_stock}),
+        description=f"Depo {action_text}: {ingredient_name} ({amount} kg). Yeni stok: {new_stock} kg."
+    )
+    db.session.add(log)
+    db.session.commit()
+    
+    from backend.services.websocket_notifier import notify_websocket
+    notify_websocket({'type': 'INVENTORY_UPDATED'})
+    
+    return jsonify({'success': True, 'message': f'Depo işlemi başarılı.', 'newStock': new_stock})
+
+@admin_bp.route('/inventory/<string:ingredient_name>/threshold', methods=['PUT'])
+def update_inventory_threshold(ingredient_name):
+    from backend.models import Inventory, AuditLog, db
+    from backend.utils import get_authenticated_user
+    import json
+    from urllib.parse import unquote
+    
+    ingredient_name = unquote(ingredient_name)
+    data = request.json or {}
+    threshold = float(data.get('threshold', 0))
+    
+    inv = Inventory.query.filter_by(ingredient_name=ingredient_name).first()
+    if not inv:
+        inv = Inventory(ingredient_name=ingredient_name, current_stock=0.0, warning_threshold=threshold)
+        db.session.add(inv)
+    else:
+        inv.warning_threshold = threshold
+        
+    current_user = get_authenticated_user()
+    user_name = current_user.name if current_user else 'Sistem'
+    
+    log = AuditLog(
+        user=user_name,
+        entity_type='Inventory',
+        entity_id=ingredient_name,
+        action='UPDATE',
+        description=f"{ingredient_name} için depo uyarı limiti güncellendi: {threshold} kg."
+    )
+    db.session.add(log)
+    db.session.commit()
+    
+    from backend.services.websocket_notifier import notify_websocket
+    notify_websocket({'type': 'INVENTORY_UPDATED'})
+    
+    return jsonify({'success': True, 'message': 'Uyarı limiti güncellendi.'})
+
+@admin_bp.route('/inventory/bulk', methods=['POST'])
+def add_inventory_bulk():
+    from backend.models import Inventory, InventoryTransaction, AuditLog, db
+    from backend.utils import get_authenticated_user
+    import json
+    
+    data = request.json or {}
+    transactions = data.get('transactions', [])
+    
+    if not transactions:
+        return jsonify({'success': False, 'message': 'İşlem listesi boş.'}), 400
+        
+    current_user = get_authenticated_user()
+    user_name = current_user.name if current_user else 'Sistem'
+    
+    for tx_data in transactions:
+        ing_name = tx_data.get('ingredient_name')
+        tx_type = tx_data.get('type')
+        amount = float(tx_data.get('amount', 0))
+        notes = tx_data.get('notes', '')
+        
+        if amount <= 0 or tx_type not in ['IN', 'OUT']:
+            continue
+            
+        inv = Inventory.query.filter_by(ingredient_name=ing_name).first()
+        if not inv:
+            inv = Inventory(ingredient_name=ing_name, current_stock=0.0, warning_threshold=0.0)
+            db.session.add(inv)
+            db.session.flush()
+            
+        prev_stock = inv.current_stock
+        if tx_type == 'IN':
+            inv.current_stock += amount
+        else:
+            inv.current_stock -= amount
+            
+        new_stock = inv.current_stock
+        
+        tx = InventoryTransaction(
+            ingredient_name=ing_name,
+            transaction_type=tx_type,
+            amount=amount,
+            previous_stock=prev_stock,
+            new_stock=new_stock,
+            user=user_name,
+            notes=notes
+        )
+        db.session.add(tx)
+        
+    log = AuditLog(
+        user=user_name,
+        entity_type='Inventory',
+        entity_id='Bulk',
+        action='UPDATE',
+        description=f"Toplu depo işlemi yapıldı ({len(transactions)} kalem)."
+    )
+    db.session.add(log)
+    db.session.commit()
+    
+    from backend.services.websocket_notifier import notify_websocket
+    notify_websocket({'type': 'INVENTORY_UPDATED'})
+    
+    return jsonify({'success': True, 'message': 'Toplu depo işlemi başarılı.'})

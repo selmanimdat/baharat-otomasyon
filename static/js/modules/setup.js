@@ -126,6 +126,7 @@ var dom = {
     // Admin navigation
     tabDashboard: document.getElementById('tab-dashboard'),
     tabOrders: document.getElementById('tab-orders'),
+    tabDeliveries: document.getElementById('tab-deliveries'),
     tabCustomers: document.getElementById('tab-customers'),
     tabRecipes: document.getElementById('tab-recipes'),
     tabUsers: document.getElementById('tab-users'),
@@ -133,14 +134,18 @@ var dom = {
     tabReports: document.getElementById('tab-reports'),
     tabTraceability: document.getElementById('tab-traceability'),
     tabAccounting: document.getElementById('tab-accounting'),
+    tabCurrentAccounts: document.getElementById('tab-current-accounts'),
+    tabInventory: document.getElementById('tab-inventory'),
     tabSettings: document.getElementById('tab-settings'),
     tabAuditLogs: document.getElementById('tab-audit-logs'),
+    tabTrash: document.getElementById('tab-trash'),
     adminSessionUsername: document.getElementById('admin-session-username'),
     btnAdminLogout: document.getElementById('btn-admin-logout'),
     
     // Admin Panels
     panelDashboard: document.getElementById('panel-dashboard'),
     panelOrders: document.getElementById('panel-orders'),
+    panelDeliveries: document.getElementById('panel-deliveries'),
     panelCustomers: document.getElementById('panel-customers'),
     panelRecipes: document.getElementById('panel-recipes'),
     panelUsers: document.getElementById('panel-users'),
@@ -148,8 +153,12 @@ var dom = {
     panelReports: document.getElementById('panel-reports'),
     panelTraceability: document.getElementById('panel-traceability'),
     panelAccounting: document.getElementById('panel-accounting'),
+    panelCurrentAccounts: document.getElementById('panel-current-accounts'),
+    panelInventory: document.getElementById('panel-inventory'),
     panelSettings: document.getElementById('panel-settings'),
+
     panelAuditLogs: document.getElementById('panel-audit-logs'),
+    panelTrash: document.getElementById('panel-trash'),
     
     // Admin Forms
     formCreateOrder: document.getElementById('form-create-order'),

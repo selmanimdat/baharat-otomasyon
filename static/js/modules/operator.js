@@ -35,6 +35,7 @@ function renderOperatorPanel() {
         }
 
         state.db.orders.forEach(o => {
+            if (o.isActive === false) return;
             o.batches.forEach(b => {
                 // Teslim tarihi olmayan siparişleri gizle
                 if (!o.deliveryDate) return;
@@ -193,11 +194,7 @@ function renderOperatorPanel() {
                     const bId = btnEl.getAttribute('data-batch-id');
                     const b = pendingBatches.find(x => x.batchId === bId);
                     if (b) {
-                        if (['beklemede', 'Bekliyor'].includes(b.status)) {
-                            await startJob(b.orderId, b.batchId);
-                        } else {
-                            await joinJob(b.orderId, b.batchId);
-                        }
+                        await joinJob(b.orderId, b.batchId);
                     }
                     
                     if (btnEl) {
@@ -598,7 +595,7 @@ function renderWeighingScreen() {
 
     // Add mixer extra items to the end of normal items (before separate divider)
     const mixerExtraRenderItems = extraMixerItems.map(e => ({
-        name: e.product,
+        name: e.product + ' (Ekstra)',
         amount: e.amount,
         tolerance: 0,
         is_separate: false,
@@ -609,7 +606,7 @@ function renderWeighingScreen() {
 
     // Add separate extra items to separate section
     const separateExtraRenderItems = extraSeparateItems.map(e => ({
-        name: e.product,
+        name: e.product + ' (Ekstra)',
         amount: e.amount,
         tolerance: 0,
         is_separate: true,
@@ -1227,9 +1224,10 @@ function showPackagingScreen() {
 async function finishJob() {
     const activeBatchLogs = state.db.logs.filter(l => l.batchId === state.activeJob.batch.id && (l.status === 'Başarılı' || l.status === 'Dahil Değil'));
     const normalItems = state.activeJob.order.recipeItems.filter(i => !i.is_separate);
-    const allNormalApproved = normalItems.every(item =>
-        activeBatchLogs.some(l => l.item === item.name)
-    );
+    const allNormalApproved = normalItems.every(item => {
+        if (window.confirmedLogs && window.confirmedLogs.has(item.name)) return true;
+        return activeBatchLogs.some(l => l.item === item.name);
+    });
     if (!allNormalApproved) {
         alert('Lütfen işi bitirmeden önce tüm ana ürünlerin tartımını onaylayın!');
         return;

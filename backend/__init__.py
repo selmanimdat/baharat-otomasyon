@@ -57,6 +57,12 @@ def create_app():
             db.session.commit()
         except Exception:
             db.session.rollback()
+
+        try:
+            db.session.execute(db.text("ALTER TABLE `order` ADD COLUMN delivered_amount FLOAT DEFAULT 0.0"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         
         try:
             db.session.execute(db.text("ALTER TABLE recipe ADD COLUMN price_per_kg FLOAT DEFAULT 150.0"))
@@ -80,7 +86,12 @@ def create_app():
             "ALTER TABLE firm ADD COLUMN notes TEXT",
             "ALTER TABLE batch ADD COLUMN bag_weight FLOAT",
             "ALTER TABLE `order` ADD COLUMN packaging_segments TEXT",
-            "ALTER TABLE recipe ADD COLUMN is_active BOOLEAN DEFAULT 1"
+            "ALTER TABLE recipe ADD COLUMN is_active BOOLEAN DEFAULT 1",
+            "ALTER TABLE recipe ADD COLUMN deleted_at DATETIME",
+            "ALTER TABLE recipe ADD COLUMN deleted_by VARCHAR(100)",
+            "ALTER TABLE `order` ADD COLUMN is_active BOOLEAN DEFAULT 1",
+            "ALTER TABLE `order` ADD COLUMN deleted_at DATETIME",
+            "ALTER TABLE `order` ADD COLUMN deleted_by VARCHAR(100)"
         ]:
             try:
                 db.session.execute(db.text(col_stmt))
@@ -90,6 +101,12 @@ def create_app():
 
         try:
             db.session.execute(db.text("UPDATE recipe SET is_active = 1 WHERE is_active IS NULL"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        try:
+            db.session.execute(db.text("UPDATE `order` SET is_active = 1 WHERE is_active IS NULL"))
             db.session.commit()
         except Exception:
             db.session.rollback()
